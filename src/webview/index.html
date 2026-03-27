@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none';
+             script-src 'nonce-{{NONCE}}' https://d3js.org;
+             style-src 'nonce-{{NONCE}}';
+             font-src 'none';
+             img-src data: {{CSP_SOURCE}};" />
+  <title>Python Package Visualizer</title>
+  <style nonce="{{NONCE}}">
+    /* ── Tokens ──────────────────────────────────────── */
+    :root {
+      --c-ok:        #4ade80;
+      --c-update:    #fb923c;
+      --c-vuln:      #f87171;
+      --c-unknown:   #94a3b8;
+      --c-missing:   #64748b;
+      --c-ok-bg:     rgba(74,222,128,.13);
+      --c-update-bg: rgba(251,146,60,.13);
+      --c-vuln-bg:   rgba(248,113,113,.13);
+      --c-unknown-bg:rgba(148,163,184,.12);
+      --c-missing-bg:rgba(100,116,139,.12);
+      --radius:      6px;
+      --radius-lg:   10px;
+      --ease:        0.16s cubic-bezier(.4,0,.2,1);
+      --shadow:      0 4px 24px rgba(0,0,0,.18);
+      --shadow-sm:   0 2px 8px  rgba(0,0,0,.12);
+    }
+
+    /* ── Reset ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--vscode-font-family);
+      font-size:   13px;
+      color:       var(--vscode-foreground);
+      background:  var(--vscode-editor-background);
+      display:     flex;
+      flex-direction: column;
+      height:      100vh;
+      overflow:    hidden;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-background);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--vscode-scrollbarSlider-hoverBackground);
+    }
+
+    /* ── Header ──────────────────────────────────────── */
+    #header {
+      display:         flex;
+      align-items:     center;
+      justify-content: space-between;
+      padding:         11px 18px;
+      background:      var(--vscode-sideBar-background);
+      border-bottom:   1px solid var(--vscode-panel-border);
+      flex-shrink:     0;
+      gap:             10px;
+    }
+
+    #header-left {
+      display:     flex;
+      align-items: center;
+      gap:         9px;
+    }
+
+    #header-icon {
+      width:  28px; height: 28px;
+      background: linear-gradient(135deg,
+        var(--vscode-button-background) 0%,
+        color-mix(in srgb, var(--vscode-button-background) 70%, #fff) 100%);
+      border-radius: 7px;
+      display:       flex;
+      align-items:   center;
+      justify-content: center;
+      font-size:     15px;
+      flex-shrink:   0;
+      box-shadow:    var(--shadow-sm);
+    }
+
+    #header h1 {
+      font-size:      13px;
+      font-weight:    700;
+      letter-spacing: .3px;
+      line-height:    1;
+    }
+    #header-sub {
+      font-size: 10px;
+      color:     var(--vscode-descriptionForeground);
+      margin-top: 1px;
+    }
+
+    #header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+    /* ── Shared button base ──────────────────────────── */
+    .hdr-btn {
+      display:     inline-flex;
+      align-items: center;
+      gap:         5px;
+      padding:     5px 11px;
+      font-size:   12px;
+      font-family: inherit;
+      border:      none;
+      border-radius: var(--radius);
+      cursor:      pointer;
+      transition:  background var(--ease), opacity var(--ease), transform var(--ease);
+      white-space: nowrap;
+    }
+    .hdr-btn:active { transform: scale(.97); }
+    .hdr-btn:disabled { opacity: .45; cursor: default; transform: none; }
+
+    #btn-refresh {
+      background: var(--vscode-button-secondaryBackground);
+      color:      var(--vscode-button-secondaryForeground);
+    }
+    #btn-refresh:hover:not(:disabled) {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    #btn-update-all {
+      display:    none;
+      background: #166534;
+      color:      #bbf7d0;
+    }
+    #btn-update-all:hover:not(:disabled) { background: #15803d; }
+
+    /* ── Toolbar ─────────────────────────────────────── */
+    #toolbar {
+      display:   flex;
+      gap:       8px;
+      padding:   8px 18px;
+      background: var(--vscode-sideBar-background);
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+    }
+
+    #search-wrap {
+      flex: 1;
+      position: relative;
+    }
+    #search-icon {
+      position: absolute;
+      left: 9px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 13px;
+      color: var(--vscode-descriptionForeground);
+      pointer-events: none;
+    }
+    #search {
+      width:      100%;
+      padding:    5px 10px 5px 30px;
+      background: var(--vscode-input-background);
+      color:      var(--vscode-input-foreground);
+      border:     1px solid var(--vscode-input-border, transparent);
+      border-radius: var(--radius);
+      font-size:  12px;
+      font-family: inherit;
+      transition: border-color var(--ease), box-shadow var(--ease);
+    }
+    #search:focus {
+      outline:      none;
+      border-color: var(--vscode-focusBorder);
+      box-shadow:   0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 25%, transparent);
+    }
+
+    .toolbar-select {
+      padding:      5px 9px;
+      background:   var(--vscode-dropdown-background);
+      color:        var(--vscode-dropdown-foreground);
+      border:       1px solid var(--vscode-dropdown-border, transparent);
+      border-radius: var(--radius);
+      font-size:    12px;
+      font-family:  inherit;
+      cursor:       pointer;
+      transition:   border-color var(--ease);
+    }
+    .toolbar-select:focus {
+      outline:      none;
+      border-color: var(--vscode-focusBorder);
+    }
+
+    /* ── Stats Cards ─────────────────────────────────── */
+    #stats-bar {
+      display:    flex;
+      gap:        8px;
+      padding:    8px 18px;
+      background: var(--vscode-editorWidget-background);
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+      flex-wrap:  wrap;
+    }
+
+    .stat-card {
+      display:      flex;
+      align-items:  center;
+      gap:          6px;
+      padding:      4px 10px;
+      border-radius: var(--radius-lg);
+      font-size:    11px;
+      font-weight:  500;
+      cursor:       default;
+      transition:   background var(--ease);
+      user-select:  none;
+    }
+    .stat-card.ok      { background: var(--c-ok-bg);     color: var(--c-ok); }
+    .stat-card.update  { background: var(--c-update-bg);  color: var(--c-update); }
+    .stat-card.unknown { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .stat-card.vuln    { background: var(--c-vuln-bg);    color: var(--c-vuln); }
+
+    .stat-num {
+      font-size:   14px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    /* ── Tabs ────────────────────────────────────────── */
+    #tab-bar {
+      display:      flex;
+      gap:          2px;
+      padding:      0 18px;
+      background:   var(--vscode-sideBar-background);
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink:  0;
+    }
+    .tab {
+      padding:       9px 14px 8px;
+      font-size:     12px;
+      font-weight:   500;
+      cursor:        pointer;
+      border-bottom: 2px solid transparent;
+      color:         var(--vscode-tab-inactiveForeground);
+      transition:    color var(--ease), border-color var(--ease);
+      white-space:   nowrap;
+      letter-spacing: .2px;
+    }
+    .tab:hover:not(.active) {
+      color: var(--vscode-foreground);
+    }
+    .tab.active {
+      color:        var(--vscode-tab-activeForeground);
+      border-bottom-color: var(--vscode-focusBorder);
+    }
+
+    /* ── Content ─────────────────────────────────────── */
+    #content {
+      flex:     1;
+      overflow: hidden;
+      display:  flex;
+      flex-direction: column;
+    }
+
+    /* ── Table shared ────────────────────────────────── */
+    table {
+      width:           100%;
+      border-collapse: collapse;
+      font-size:       12px;
+    }
+    thead {
+      position:   sticky;
+      top:        0;
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      z-index:    2;
+    }
+    th {
+      padding:     0;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      white-space: nowrap;
+    }
+
+    /* Sortable header button */
+    th .th-inner {
+      display:      inline-flex;
+      align-items:  center;
+      gap:          5px;
+      padding:      8px 12px;
+      width:        100%;
+      font-weight:  600;
+      font-size:    11px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color:        var(--vscode-descriptionForeground);
+      cursor:       pointer;
+      user-select:  none;
+      transition:   color var(--ease), background var(--ease);
+      border-radius: 0;
+    }
+    th .th-inner:hover {
+      color:      var(--vscode-foreground);
+      background: var(--vscode-list-hoverBackground);
+    }
+    th.sorted .th-inner {
+      color: var(--vscode-foreground);
+    }
+    th:not([data-col]) .th-inner { cursor: default; }
+    th:not([data-col]) .th-inner:hover { background: none; }
+
+    /* Sort icon */
+    .sort-icon {
+      display:     inline-flex;
+      flex-direction: column;
+      gap:         1px;
+      opacity:     .35;
+      transition:  opacity var(--ease), transform var(--ease);
+      font-size:   9px;
+      line-height: 1;
+    }
+    th.sorted .sort-icon    { opacity: 1; }
+    th.sort-asc  .sort-icon { color: var(--vscode-button-background); }
+    th.sort-desc .sort-icon { color: var(--vscode-button-background); }
+    td {
+      padding:      9px 12px;
+      border-bottom: 1px solid color-mix(in srgb,
+        var(--vscode-panel-border) 60%, transparent);
+      vertical-align: middle;
+    }
+    tbody tr {
+      transition: background var(--ease);
+      border-left: 3px solid transparent;
+    }
+    tbody tr:hover td {
+      background: var(--vscode-list-hoverBackground);
+    }
+    /* Row left-border accent by status */
+    tbody tr.row-update-available { border-left-color: var(--c-update); }
+    tbody tr.row-up-to-date        { border-left-color: var(--c-ok); }
+    tbody tr.row-vulnerable        { border-left-color: var(--c-vuln); }
+    tbody tr.row-not-installed     { border-left-color: var(--c-missing); }
+
+    /* ── List View ───────────────────────────────────── */
+    #view-list {
+      flex:       1;
+      overflow-y: auto;
+    }
+
+    /* Package name cell */
+    .pkg-name {
+      display:     flex;
+      align-items: center;
+      gap:         6px;
+      flex-wrap:   wrap;
+    }
+    .pkg-name-link {
+      font-weight:      600;
+      font-size:        12.5px;
+      cursor:           pointer;
+      text-decoration:  none;
+      color:            var(--vscode-foreground);
+      transition:       color var(--ease);
+    }
+    .pkg-name-link:hover { color: var(--vscode-textLink-foreground); }
+
+    .pkg-source {
+      font-size:  10px;
+      color:      var(--vscode-descriptionForeground);
+      padding:    1px 5px;
+      background: color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+      border-radius: 3px;
+    }
+
+    /* Version cells */
+    .ver { font-variant-numeric: tabular-nums; font-size: 12px; }
+    .ver-latest { color: var(--c-ok); font-weight: 500; }
+
+    /* ── Badges ──────────────────────────────────────── */
+    .badge {
+      display:      inline-flex;
+      align-items:  center;
+      gap:          4px;
+      padding:      3px 9px;
+      border-radius: var(--radius-lg);
+      font-size:    11px;
+      font-weight:  500;
+      white-space:  nowrap;
+      letter-spacing: .15px;
+    }
+    .badge.up-to-date      { background: var(--c-ok-bg);      color: var(--c-ok); }
+    .badge.update-available { background: var(--c-update-bg);  color: var(--c-update); }
+    .badge.unknown          { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .badge.not-installed    { background: var(--c-missing-bg); color: var(--c-missing); }
+    .badge.vulnerable       { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
+
+    .inline-tag {
+      display:      inline-flex;
+      align-items:  center;
+      gap:          3px;
+      font-size:    10px;
+      padding:      1px 5px;
+      border-radius: 3px;
+      white-space:  nowrap;
+    }
+    .inline-tag.unused  { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .inline-tag.cve     { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
+
+    /* ── Action buttons ──────────────────────────────── */
+    .act-group { display: flex; gap: 5px; align-items: center; }
+
+    .action-btn {
+      display:      inline-flex;
+      align-items:  center;
+      gap:          4px;
+      padding:      4px 10px;
+      font-size:    11.5px;
+      font-family:  inherit;
+      font-weight:  500;
+      border:       none;
+      border-radius: var(--radius);
+      cursor:       pointer;
+      transition:   background var(--ease), opacity var(--ease), transform var(--ease);
+      white-space:  nowrap;
+    }
+    .action-btn:active:not(:disabled) { transform: scale(.96); }
+    .action-btn:disabled { opacity: .4; cursor: default; transform: none; }
+
+    .action-btn.secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color:      var(--vscode-button-secondaryForeground);
+    }
+    .action-btn.secondary:hover:not(:disabled) {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    .action-btn.primary {
+      background: var(--vscode-button-background);
+      color:      var(--vscode-button-foreground);
+    }
+    .action-btn.primary:hover:not(:disabled) {
+      background: var(--vscode-button-hoverBackground);
+    }
+    .action-btn.success {
+      background: #14532d;
+      color:      #bbf7d0;
+    }
+    .action-btn.success:hover:not(:disabled) { background: #166534; }
+    .action-btn.danger {
+      background: rgba(248,113,113,.15);
+      color:      var(--c-vuln);
+    }
+    .action-btn.danger:hover:not(:disabled) { background: rgba(248,113,113,.25); }
+
+    /* ── Graph View ──────────────────────────────────── */
+    #view-graph {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    #graph-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+      background: var(--vscode-editor-background);
+    }
+    #graph-toolbar span {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin-right: auto;
+    }
+    .graph-btn {
+      padding: 3px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .graph-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    #graph-canvas { flex: 1; overflow: hidden; }
+    #graph-canvas svg { width: 100%; height: 100%; display: block; }
+
+    .graph-legend {
+      position: absolute;
+      bottom: 16px; right: 16px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    .legend-item { display: flex; align-items: center; gap: 7px; }
+    .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .node { cursor: pointer; }
+    .node circle {
+      stroke-width: 2px;
+      transition: r .15s ease;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,.25));
+    }
+    .node:hover circle { r: 10px; }
+    .node text {
+      font-size: 11.5px;
+      fill: var(--vscode-foreground);
+      dominant-baseline: middle;
+      pointer-events: none;
+      font-family: var(--vscode-font-family, sans-serif);
+    }
+    .node.root > text { font-weight: 700; font-size: 13px; }
+    .link {
+      fill: none;
+      stroke: var(--vscode-panel-border);
+      stroke-width: 1.5px;
+      stroke-opacity: .5;
+    }
+    .node.up-to-date       circle { fill: var(--c-ok);      stroke: var(--c-ok); }
+    .node.update-available circle { fill: var(--c-update);  stroke: var(--c-update); }
+    .node.unknown          circle { fill: var(--c-unknown); stroke: var(--c-unknown); }
+    .node.vulnerable       circle { fill: var(--c-vuln);    stroke: var(--c-vuln); }
+    .node.not-installed    circle { fill: none; stroke: var(--c-missing); stroke-dasharray: 4 2; }
+    .node.root             circle { fill: var(--vscode-button-background); stroke: var(--vscode-button-hoverBackground, var(--vscode-button-background)); r: 12px; }
+    .node.collapsed        circle { stroke-dasharray: 3 2; opacity: .75; }
+
+    /* ── Unused View ─────────────────────────────────── */
+    #view-unused { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
+
+    #scan-stats {
+      margin: 12px 18px 0;
+      padding: 7px 12px;
+      background: color-mix(in srgb, var(--vscode-focusBorder) 8%, transparent);
+      border-radius: var(--radius);
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    #unused-banner {
+      margin: 10px 18px 0;
+      padding: 10px 14px;
+      background: color-mix(in srgb, var(--c-update) 8%, transparent);
+      border-left: 3px solid var(--c-update);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+
+    code {
+      padding: 1px 5px;
+      background: color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
+      border-radius: 3px;
+      font-size: .9em;
+    }
+
+    #unused-empty {
+      display: none;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--vscode-descriptionForeground);
+    }
+    #unused-empty .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    #unused-empty p { font-size: 13px; line-height: 1.6; }
+
+    /* ── Detail Panel ────────────────────────────────── */
+    #detail-panel {
+      display:     none;
+      position:    fixed;
+      right:  0; top: 0; bottom: 0;
+      width:       300px;
+      background:  var(--vscode-sideBar-background);
+      border-left: 1px solid var(--vscode-panel-border);
+      overflow-y:  auto;
+      z-index:     200;
+      box-shadow:  -4px 0 24px rgba(0,0,0,.2);
+      animation:   slideIn var(--ease);
+    }
+    @keyframes slideIn {
+      from { transform: translateX(24px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    #detail-header {
+      display:         flex;
+      align-items:     center;
+      justify-content: space-between;
+      padding:         14px 16px 10px;
+      border-bottom:   1px solid var(--vscode-panel-border);
+      position:        sticky;
+      top:             0;
+      background:      var(--vscode-sideBar-background);
+      z-index:         1;
+    }
+    #detail-name {
+      font-size:   14px;
+      font-weight: 700;
+      color:       var(--vscode-foreground);
+    }
+    #detail-close {
+      background:  none;
+      border:      none;
+      color:       var(--vscode-descriptionForeground);
+      font-size:   18px;
+      line-height: 1;
+      cursor:      pointer;
+      padding:     2px 6px;
+      border-radius: var(--radius);
+      transition:  background var(--ease), color var(--ease);
+    }
+    #detail-close:hover {
+      background: var(--vscode-list-hoverBackground);
+      color:      var(--vscode-foreground);
+    }
+
+    #detail-body { padding: 14px 16px; }
+
+    .field {
+      margin-bottom: 12px;
+    }
+    .field label {
+      font-size:    10px;
+      font-weight:  700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color:        var(--vscode-descriptionForeground);
+      display:      block;
+      margin-bottom: 3px;
+    }
+    .field-value {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .version-chip {
+      display:       inline-block;
+      padding:       2px 7px;
+      border-radius: var(--radius);
+      margin:        2px;
+      font-size:     11px;
+      background:    var(--vscode-badge-background);
+      color:         var(--vscode-badge-foreground);
+      cursor:        pointer;
+      transition:    background var(--ease), transform var(--ease);
+      font-variant-numeric: tabular-nums;
+    }
+    .version-chip:hover {
+      background: var(--vscode-button-background);
+      color:      var(--vscode-button-foreground);
+      transform:  scale(1.05);
+    }
+
+    .vuln-card {
+      margin-top: 6px;
+      padding: 10px;
+      background: var(--c-vuln-bg);
+      border: 1px solid color-mix(in srgb, var(--c-vuln) 30%, transparent);
+      border-radius: var(--radius);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .vuln-id   { font-weight: 700; color: var(--c-vuln); }
+    .vuln-fix  { color: var(--vscode-descriptionForeground); margin-top: 3px; }
+    .vuln-desc { margin-top: 4px; color: var(--vscode-foreground); }
+
+    /* ── Loading ─────────────────────────────────────── */
+    #loading {
+      display:         none;
+      flex-direction:  column;
+      align-items:     center;
+      justify-content: center;
+      flex:            1;
+      gap:             14px;
+      color:           var(--vscode-descriptionForeground);
+    }
+
+    .loader {
+      position:      relative;
+      width:  40px; height: 40px;
+    }
+    .loader::before,
+    .loader::after {
+      content:       '';
+      position:      absolute;
+      inset:         0;
+      border-radius: 50%;
+      border:        3px solid transparent;
+    }
+    .loader::before {
+      border-top-color: var(--vscode-button-background);
+      animation: spin .7s linear infinite;
+    }
+    .loader::after {
+      border-bottom-color: color-mix(in srgb,
+        var(--vscode-button-background) 40%, transparent);
+      animation: spin 1.4s linear infinite reverse;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading-msg {
+      font-size: 12px;
+      letter-spacing: .2px;
+    }
+
+    /* ── Empty State ─────────────────────────────────── */
+    #empty-state {
+      display:         none;
+      flex-direction:  column;
+      align-items:     center;
+      justify-content: center;
+      flex:            1;
+      gap:             12px;
+      color:           var(--vscode-descriptionForeground);
+    }
+    #empty-state .empty-icon { font-size: 48px; opacity: .6; }
+    #empty-state p { font-size: 13px; max-width: 320px; text-align: center; line-height: 1.6; }
+
+    /* ── Overlay (click outside detail) ─────────────── */
+    #overlay {
+      display:    none;
+      position:   fixed;
+      inset:      0;
+      z-index:    199;
+      background: rgba(0,0,0,.18);
+      backdrop-filter: blur(1px);
+    }
+
+    /* ── Fade-in rows ────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    tbody tr { animation: fadeUp .18s ease both; }
+
+    /* ── Export button ───────────────────────────────── */
+    #btn-export {
+      background: var(--vscode-button-secondaryBackground);
+      color:      var(--vscode-button-secondaryForeground);
+      gap: 4px;
+    }
+    #btn-export:hover:not(:disabled) {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    #btn-export .chevron {
+      font-size: 9px;
+      opacity: .6;
+      transition: transform .18s var(--ease);
+      display: inline-block;
+    }
+    #export-wrap.open #btn-export .chevron { transform: rotate(180deg); }
+
+    /* ── Export dropdown ─────────────────────────────── */
+    #export-wrap { position: relative; display: inline-block; }
+    #export-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+      border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      overflow: hidden;
+      min-width: 180px;
+      z-index: 200;
+      box-shadow: var(--shadow);
+    }
+    #export-menu.open {
+      display: block;
+      animation: dropdownIn .15s var(--ease) both;
+    }
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .export-label {
+      padding: 7px 12px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--vscode-descriptionForeground);
+      user-select: none;
+    }
+    .export-divider {
+      height: 1px;
+      background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+      margin: 2px 0;
+    }
+    .export-item {
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--vscode-menu-foreground, var(--vscode-foreground));
+      user-select: none;
+      transition: background .1s;
+    }
+    .export-item:last-child { margin-bottom: 4px; }
+    .export-item .ei-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+    .export-item .ei-text { display: flex; flex-direction: column; }
+    .export-item .ei-title { font-weight: 600; }
+    .export-item .ei-sub   { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 1px; }
+    .export-item:hover { background: var(--vscode-list-hoverBackground); }
+
+    /* ── Add Package modal ───────────────────────────── */
+    #add-pkg-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: var(--vscode-widget-shadow, rgba(0,0,0,.5));
+      backdrop-filter: blur(2px);
+      align-items: center;
+      justify-content: center;
+    }
+    #add-pkg-modal.open {
+      display: flex;
+      animation: modalFadeIn .18s ease both;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    #add-pkg-dialog {
+      background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+      border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+      border-radius: 8px;
+      width: min(460px, 94vw);
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      animation: modalSlideIn .18s var(--ease) both;
+      overflow: hidden;
+    }
+    @keyframes modalSlideIn {
+      from { transform: translateY(10px) scale(.98); opacity: 0; }
+      to   { transform: translateY(0)    scale(1);   opacity: 1; }
+    }
+
+    /* Modal header */
+    #add-pkg-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+    }
+    #add-pkg-header-icon {
+      width: 28px; height: 28px;
+      background: var(--vscode-badge-background);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      color: var(--vscode-badge-foreground);
+    }
+    #add-pkg-header-text { flex: 1; min-width: 0; }
+    #add-pkg-header-text h2 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--vscode-foreground);
+    }
+    #add-pkg-header-text p {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin: 2px 0 0;
+    }
+    #add-pkg-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--vscode-icon-foreground, var(--vscode-foreground));
+      font-size: 16px;
+      line-height: 1;
+      padding: 4px 6px;
+      border-radius: 4px;
+      transition: background .12s;
+      opacity: .7;
+    }
+    #add-pkg-close:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+
+    /* Modal body */
+    #add-pkg-body { padding: 16px; }
+    #add-pkg-search-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    #add-pkg-input {
+      flex: 1;
+      padding: 6px 10px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    #add-pkg-input::placeholder { color: var(--vscode-input-placeholderForeground); }
+    #add-pkg-input:focus { border-color: var(--vscode-focusBorder); outline: 1px solid var(--vscode-focusBorder); }
+
+    #add-pkg-search {
+      padding: 6px 12px;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .12s;
+    }
+    #add-pkg-search:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+    /* Result box */
+    #add-pkg-result {
+      min-height: 64px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+      background: var(--vscode-input-background);
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+      display: flex;
+      align-items: center;
+    }
+    #add-pkg-result.has-result {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 5px;
+    }
+    #add-pkg-result.is-installed {
+      border-color: var(--c-ok);
+      background: var(--vscode-input-background);
+    }
+    #add-pkg-result.is-error {
+      border-color: var(--vscode-errorForeground, var(--c-vuln));
+    }
+    .apkg-row    { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .apkg-name   { font-size: 13px; font-weight: 700; color: var(--vscode-foreground); }
+    .apkg-ver    {
+      font-size: 11px; font-weight: 500;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      padding: 1px 6px; border-radius: 10px;
+    }
+    .apkg-installed-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--vscode-testing-iconPassed, var(--c-ok));
+      background: var(--vscode-testing-passingForeground, transparent);
+      padding: 2px 7px;
+      border-radius: 10px;
+      border: 1px solid var(--c-ok);
+    }
+    .apkg-installed-hint {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.5;
+    }
+    .apkg-sum    { font-size: 11px; color: var(--vscode-descriptionForeground); line-height: 1.5; }
+    .apkg-error  { color: var(--vscode-errorForeground, var(--c-vuln)); }
+
+    /* Install button — already-installed state */
+    #add-pkg-install.is-installed {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      opacity: .7;
+      cursor: default;
+    }
+
+    /* Modal footer */
+    #add-pkg-footer {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      padding: 10px 16px;
+      border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+    }
+    #add-pkg-cancel {
+      padding: 5px 14px;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none; border-radius: 4px;
+      font-size: 12px; font-family: inherit;
+      cursor: pointer; transition: background .12s;
+    }
+    #add-pkg-cancel:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    #add-pkg-install {
+      padding: 5px 16px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none; border-radius: 4px;
+      font-size: 12px; font-family: inherit; font-weight: 600;
+      cursor: pointer; transition: background .12s, opacity .12s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    #add-pkg-install:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
+    #add-pkg-install:disabled { opacity: .38; cursor: default; }
+
+    /* ── Group tags ──────────────────────────────────── */
+    .group-tag {
+      display: inline-flex;
+      align-items: center;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .group-tag.dev      { background: rgba(59,130,246,.18);  color: #60a5fa; }
+    .group-tag.test     { background: rgba(168,85,247,.18);  color: #c084fc; }
+    .group-tag.docs     { background: rgba(20,184,166,.18);  color: #2dd4bf; }
+    .group-tag.lint     { background: rgba(148,163,184,.18); color: #94a3b8; }
+    .group-tag.optional { background: rgba(251,191,36,.18);  color: #fbbf24; }
+
+    /* ── History timeline ────────────────────────────── */
+    .history-entry {
+      display: flex;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+      font-size: 12px;
+    }
+    .history-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+    .history-dot.pip-install { background: var(--c-ok); }
+    .history-dot.detected    { background: var(--c-unknown); }
+    .history-dot.pip-rollback { background: var(--c-missing); }
+    .history-action { font-weight: 600; }
+    .history-time   { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+
+    /* ── External link icon ──────────────────────────── */
+    .pkg-ext-link {
+      font-size: 10px;
+      color: var(--vscode-textLink-foreground);
+      opacity: 0.7;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .pkg-ext-link:hover { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div id="header">
+    <div id="header-left">
+      <div id="header-icon">&#x1F4E6;</div>
+      <div>
+        <div id="header-h1">Python Package Visualizer</div>
+        <div id="header-sub">Workspace dependency manager</div>
+      </div>
+    </div>
+    <div id="header-actions">
+      <button id="btn-update-all" class="hdr-btn" title="Update all outdated packages">
+        &#x2191; Update All
+      </button>
+      <button id="btn-add-pkg" class="hdr-btn" title="Install a new package">&#xFF0B; Add Package</button>
+      <div id="export-wrap">
+        <button id="btn-export" class="hdr-btn" title="Export report">
+          &#x2B06; Export <span class="chevron">&#x25BE;</span>
+        </button>
+        <div id="export-menu">
+          <div class="export-label">Export as</div>
+          <div class="export-item" data-fmt="markdown">
+            <span class="ei-icon">&#x1F4DD;</span>
+            <span class="ei-text">
+              <span class="ei-title">Markdown</span>
+              <span class="ei-sub">Table with links &amp; badges</span>
+            </span>
+          </div>
+          <div class="export-item" data-fmt="json">
+            <span class="ei-icon">&#x7B;&#x7D;</span>
+            <span class="ei-text">
+              <span class="ei-title">JSON</span>
+              <span class="ei-sub">Machine-readable data</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <button id="btn-refresh" class="hdr-btn" title="Re-scan workspace">
+        &#x21BB; Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div id="search-wrap">
+      <span id="search-icon">&#x1F50D;</span>
+      <input id="search" type="text" placeholder="Search packages, summaries…" autocomplete="off" spellcheck="false" />
+    </div>
+    <select id="filter-status" class="toolbar-select">
+      <option value="all">All statuses</option>
+      <option value="update-available">Updates available</option>
+      <option value="up-to-date">Up to date</option>
+      <option value="unknown">Unknown</option>
+      <option value="not-installed">Not installed</option>
+    </select>
+    <select id="filter-group" class="toolbar-select">
+      <option value="all">All groups</option>
+      <option value="main">Main</option>
+      <option value="dev">Dev</option>
+      <option value="test">Test</option>
+      <option value="docs">Docs</option>
+      <option value="lint">Lint</option>
+      <option value="optional">Optional</option>
+    </select>
+    <!-- sort-by dropdown removed — column headers handle sorting -->
+  </div>
+
+  <!-- Stats Bar -->
+  <div id="stats-bar">
+    <span class="stat-card ok">
+      <span>✅</span>
+      <span class="stat-num" id="stat-ok">0</span>
+      <span>up to date</span>
+    </span>
+    <span class="stat-card update">
+      <span>⬆️</span>
+      <span class="stat-num" id="stat-update">0</span>
+      <span>updates available</span>
+    </span>
+    <span class="stat-card unknown">
+      <span>❓</span>
+      <span class="stat-num" id="stat-unknown">0</span>
+      <span>unknown</span>
+    </span>
+    <span class="stat-card vuln" id="stat-vuln-card" style="display:none">
+      <span>&#x1F534;</span>
+      <span class="stat-num" id="stat-vuln">0</span>
+      <span>vulnerable</span>
+    </span>
+    <span class="stat-card unknown" id="stat-groups-card" style="display:none; font-size:10px; padding:4px 10px;">
+      <span id="stat-groups-text"></span>
+    </span>
+  </div>
+
+  <!-- Tab Bar -->
+  <div id="tab-bar">
+    <div class="tab active" data-tab="list">Package List</div>
+    <div class="tab" data-tab="unused">Unused Packages</div>
+    <div class="tab" data-tab="graph">Dependency Graph</div>
+    <div class="tab" data-tab="history">History</div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Loading -->
+    <div id="loading">
+      <div class="loader"></div>
+      <span id="loading-msg">Scanning workspace…</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state">
+      <div class="empty-icon">&#x1F4E6;</div>
+      <p>No packages found.<br/>Open a Python project that contains a
+        <code>requirements.txt</code>, <code>pyproject.toml</code>, or <code>setup.py</code>.</p>
+    </div>
+
+    <!-- Dependency Graph -->
+    <div id="view-graph">
+      <div id="graph-toolbar">
+        <span>Scroll to zoom &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Click node to expand / view details</span>
+        <button class="graph-btn" id="graph-fit">⊡ Fit</button>
+        <button class="graph-btn" id="graph-zoom-in">＋</button>
+        <button class="graph-btn" id="graph-zoom-out">－</button>
+      </div>
+      <div id="graph-canvas"></div>
+    </div>
+
+    <!-- Unused Packages -->
+    <div id="view-unused">
+      <div id="scan-stats"></div>
+      <div id="unused-banner">
+        <strong>⚠️ Note:</strong>
+        Detection uses static <code>import</code> analysis of <code>.py</code> files.
+        CLI tools (uvicorn, gunicorn, black…), runtime deps (python-multipart…) and
+        namespace packages (google.*, azure.*) are <strong>excluded automatically</strong>.
+        Packages loaded via <code>importlib</code>, entry-point plugins, or conditional
+        imports may still appear — always verify before removing.
+      </div>
+      <table style="margin-top:10px">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Installed</th>
+            <th>Source</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="unused-table-body"></tbody>
+      </table>
+      <div id="unused-empty">
+        <div class="empty-icon">✅</div>
+        <p>All declared packages appear to be imported somewhere in this project.</p>
+      </div>
+    </div>
+
+    <!-- Package List -->
+    <div id="view-list">
+      <table>
+        <thead>
+          <tr>
+            <th data-col="name" class="sorted sort-asc">
+              <span class="th-inner">
+                Package
+                <span class="sort-icon" id="si-name">▲</span>
+              </span>
+            </th>
+            <th data-col="installed">
+              <span class="th-inner">
+                Installed
+                <span class="sort-icon" id="si-installed">⬍</span>
+              </span>
+            </th>
+            <th data-col="latest">
+              <span class="th-inner">
+                Latest
+                <span class="sort-icon" id="si-latest">⬍</span>
+              </span>
+            </th>
+            <th data-col="status">
+              <span class="th-inner">
+                Status
+                <span class="sort-icon" id="si-status">&#x2B0D;</span>
+              </span>
+            </th>
+            <th data-col="released">
+              <span class="th-inner">
+                Released
+                <span class="sort-icon" id="si-released">&#x2B0D;</span>
+              </span>
+            </th>
+            <th>
+              <span class="th-inner" style="cursor:default">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="pkg-table-body"></tbody>
+      </table>
+    </div>
+
+    <!-- History View -->
+    <div id="view-history" style="display:none; flex:1; overflow-y:auto; padding:16px;">
+      <div id="history-empty" style="text-align:center; padding:40px; color:var(--vscode-descriptionForeground);">
+        &#x1F553; No update history yet. Updates and rollbacks will appear here.
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Add Package Modal -->
+  <div id="add-pkg-modal">
+    <div id="add-pkg-dialog">
+      <div id="add-pkg-header">
+        <div id="add-pkg-header-icon">&#x1F4E6;</div>
+        <div id="add-pkg-header-text">
+          <h2>Install New Package</h2>
+          <p>Search PyPI and install into your environment</p>
+        </div>
+        <button id="add-pkg-close" title="Close">&times;</button>
+      </div>
+      <div id="add-pkg-body">
+        <div id="add-pkg-search-row">
+          <input id="add-pkg-input" type="text"
+            placeholder="e.g. requests, numpy, fastapi…"
+            autocomplete="off" spellcheck="false" />
+          <button id="add-pkg-search">Search</button>
+        </div>
+        <div id="add-pkg-result">
+          <span>Type a package name and press <strong>Search</strong> or Enter.</span>
+        </div>
+      </div>
+      <div id="add-pkg-footer">
+        <button id="add-pkg-cancel">Cancel</button>
+        <button id="add-pkg-install" disabled>&#x2B07; Install</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay -->
+  <div id="overlay"></div>
+
+  <!-- Detail Panel -->
+  <div id="detail-panel">
+    <div id="detail-header">
+      <span id="detail-name">Package</span>
+      <button id="detail-close" title="Close">&times;</button>
+    </div>
+    <div id="detail-body"></div>
+  </div>
+
+  <!-- D3.js -->
+  <script nonce="{{NONCE}}" src="https://d3js.org/d3.v7.min.js" crossorigin="anonymous"></script>
+  <!-- Extension script -->
+  <script nonce="{{NONCE}}" src="{{MAIN_JS_URI}}"></script>
+</body>
+</html>

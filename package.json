@@ -1,0 +1,174 @@
+{
+  "name": "python-package-visualizer",
+  "displayName": "Python Package Visualizer",
+  "description": "A VS Code extension to visualize, manage and audit Python workspace dependencies — with version checks, CVE badges, unused package detection, dependency graph, and one-click updates.",
+  "version": "0.1.0",
+  "publisher": "Elanchezhiyan-P",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "python",
+    "pip",
+    "pypi",
+    "dependencies",
+    "packages",
+    "visualizer"
+  ],
+  "author": {
+    "name": "Elanchezhiyan P",
+    "url": "https://codebyelan.in"
+  },
+  "homepage": "https://codebyelan.in",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Elanchezhiyan-P/python-package-visualizer"
+  },
+  "activationEvents": [
+    "onLanguage:python",
+    "workspaceContains:**/requirements.txt",
+    "workspaceContains:**/pyproject.toml",
+    "workspaceContains:**/setup.py"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pythonPackageVisualizer",
+          "title": "Python Packages",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pythonPackageVisualizer": [
+        {
+          "type": "webview",
+          "id": "pythonPackageVisualizer.sidebar",
+          "name": "Package Visualizer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "extension.showPackageVisualizer",
+        "title": "Show Package Visualizer",
+        "category": "Python Packages",
+        "icon": "$(package)"
+      },
+      {
+        "command": "extension.openPackageVisualizer",
+        "title": "Open Package Visualizer",
+        "category": "Python Packages"
+      },
+      {
+        "command": "extension.checkPackageUpdates",
+        "title": "Check Package Updates",
+        "category": "Python Packages",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "extension.updatePackage",
+        "title": "Update Package",
+        "category": "Python Packages"
+      },
+      {
+        "command": "extension.rollbackPackage",
+        "title": "Rollback Package",
+        "category": "Python Packages"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceFilename == requirements.txt || resourceFilename == pyproject.toml || resourceFilename == setup.py",
+          "command": "extension.showPackageVisualizer",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "when": "resourceFilename == requirements.txt || resourceFilename == pyproject.toml || resourceFilename == setup.py",
+          "command": "extension.checkPackageUpdates",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "extension.showPackageVisualizer"
+        },
+        {
+          "command": "extension.openPackageVisualizer"
+        },
+        {
+          "command": "extension.checkPackageUpdates"
+        },
+        {
+          "command": "extension.updatePackage",
+          "when": "false"
+        },
+        {
+          "command": "extension.rollbackPackage",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Python Package Visualizer",
+      "properties": {
+        "pythonPackageVisualizer.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override Python interpreter path (leave empty to auto-detect from ms-python extension or PATH)"
+        },
+        "pythonPackageVisualizer.cacheExpiryMinutes": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 1440,
+          "description": "Minutes before cached PyPI data is considered stale and re-fetched"
+        },
+        "pythonPackageVisualizer.autoCheckOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically check for updates when a Python workspace opens"
+        },
+        "pythonPackageVisualizer.notifyOnOutdated": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification when outdated packages are found during auto-check"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "node ./out-test/test/runTests.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.0"
+  }
+}
