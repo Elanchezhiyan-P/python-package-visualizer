@@ -1,0 +1,35 @@
+name: Publish to VS Code Marketplace
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # triggers on tags like v0.1.0, v1.0.0, etc.
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Publish to Marketplace
+        run: vsce publish --no-dependencies
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
