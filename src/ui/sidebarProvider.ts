@@ -334,6 +334,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       opacity: .55;
       line-height: 1.6;
     }
+    
+    .author-tagline {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 2px;
+    }
+
+    .author-meta,
+    .author-skills,
+    .author-cred {
+      font-size: 10.5px;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -342,7 +356,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   <div class="hero">
     <div class="hero-icon">📦</div>
     <div class="hero-name">Python Package Visualizer</div>
-    <span class="hero-badge">v0.1.0</span>
+    <span class="hero-badge">v0.2.0</span>
     <div class="hero-desc">Manage and visualize your Python workspace dependencies inside VS Code.</div>
   </div>
 
@@ -468,8 +482,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       <div>
         <div class="author-info-name">Elanchezhiyan P</div>
         <div class="author-info-role">Senior Software Developer</div>
+        <div class="author-tagline">Full Stack Developer | .NET | AI | Cloud</div>
       </div>
     </div>
+    <div class="author-skills">Specialized in .NET, React, AI, Integrations & DevOps</div>
+    <div class="author-cred">🧩 Open Source Contributor · 📦 NuGet Publisher · ✍️ Technical Blogger</div>
     <div class="author-links">
       <a class="author-link" id="link-portfolio">
         <span class="author-link-icon">🌐</span> codebyelan.in
@@ -477,10 +494,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       <a class="author-link" id="link-github-author">
         <span class="author-link-icon">🐙</span> github.com/Elanchezhiyan-P
       </a>
+      <a class="author-link" id="link-linkedin">
+        <span class="author-link-icon">🔗</span> LinkedIn
+      </a>
     </div>
   </div>
 
-  <div class="footer">MIT License &nbsp;·&nbsp; Python Package Visualizer v0.1.0</div>
+  <div class="footer">MIT License &nbsp;·&nbsp; Python Package Visualizer v0.2.0</div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -501,6 +521,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       openUrl('https://codebyelan.in'));
     document.getElementById('link-github-author').addEventListener('click', () =>
       openUrl('https://github.com/Elanchezhiyan-P'));
+    document.getElementById('link-linkedin').addEventListener('click', () =>
+      openUrl('https://www.linkedin.com/in/elanchezhiyan-p/'));
   </script>
 </body>
 </html>`;
