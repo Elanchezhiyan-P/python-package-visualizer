@@ -12,6 +12,7 @@
   let activeTab = 'list';
   let sortCol = 'status';   // active sort column key
   let sortDir = 'asc';      // 'asc' | 'desc'
+  let selectedPackages = new Set(); // Set of package names
 
   // Pending PyPI search result (for Add Package modal)
   let pendingInstallName = '';
@@ -58,6 +59,13 @@
   const elBtnExport   = document.getElementById('btn-export');
   const elExportMenu  = document.getElementById('export-menu');
   const elExportWrap  = document.getElementById('export-wrap');
+  // Bulk bar & checkboxes
+  const elBulkBar    = document.getElementById('bulk-bar');
+  const elBulkCount  = document.getElementById('bulk-count');
+  const elBulkUpdate = document.getElementById('bulk-update');
+  const elBulkDeselect = document.getElementById('bulk-deselect');
+  const elCheckAll   = document.getElementById('check-all');
+  const elCopyToast  = document.getElementById('copy-toast');
 
   // ── Message listener (extension → webview) ───────────────────────────────
   window.addEventListener('message', event => {
@@ -200,6 +208,62 @@
         }
         closeExportMenu();
       });
+    });
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    if (!elCopyToast) return;
+    elCopyToast.textContent = msg;
+    elCopyToast.classList.add('show');
+    setTimeout(() => elCopyToast.classList.remove('show'), 2000);
+  }
+
+  // ── Bulk bar ──────────────────────────────────────────────────────────────
+  function updateBulkBar() {
+    if (!elBulkBar) return;
+    if (selectedPackages.size > 0) {
+      elBulkBar.classList.add('visible');
+      if (elBulkCount) elBulkCount.textContent = `${selectedPackages.size} selected`;
+    } else {
+      elBulkBar.classList.remove('visible');
+    }
+    if (elCheckAll) {
+      const filtered = getFiltered();
+      elCheckAll.checked = filtered.length > 0 && filtered.every(p => selectedPackages.has(p.name));
+      elCheckAll.indeterminate = selectedPackages.size > 0 && !elCheckAll.checked;
+    }
+  }
+
+  if (elBulkUpdate) {
+    elBulkUpdate.addEventListener('click', () => {
+      const names = [...selectedPackages].filter(name => {
+        const pkg = allPackages.find(p => p.name === name);
+        return pkg && pkg.status === 'update-available';
+      });
+      if (names.length) { vscode.postMessage({ type: 'bulkUpdate', names }); }
+      selectedPackages.clear();
+      updateBulkBar();
+      renderAll();
+    });
+  }
+  if (elBulkDeselect) {
+    elBulkDeselect.addEventListener('click', () => {
+      selectedPackages.clear();
+      updateBulkBar();
+      renderAll();
+    });
+  }
+  if (elCheckAll) {
+    elCheckAll.addEventListener('change', () => {
+      const filtered = getFiltered();
+      if (elCheckAll.checked) {
+        filtered.forEach(p => selectedPackages.add(p.name));
+      } else {
+        filtered.forEach(p => selectedPackages.delete(p.name));
+      }
+      updateBulkBar();
+      renderAll();
     });
   }
 
@@ -761,6 +825,7 @@
       const hasHistory     = pkg.allVersions && pkg.allVersions.length > 1;
       const hasVuln        = pkg.vulnerabilities && pkg.vulnerabilities.length > 0;
       const grp            = pkg.group || 'main';
+      const isSelected     = selectedPackages.has(pkg.name);
 
       // Row accent + staggered animation
       tr.classList.add(`row-${pkg.status || 'unknown'}`);
@@ -768,7 +833,7 @@
       tr.style.animationDelay = `${i * 18}ms`;
 
       const latestDisplay = hasUpdate
-        ? `<span class="ver ver-latest">${esc(pkg.latestVersion)}</span>`
+        ? `<span class="ver ver-latest" data-copy="${esc(pkg.latestVersion)}" title="Click to copy" style="cursor:pointer">${esc(pkg.latestVersion)}</span>`
         : `<span class="ver">${esc(pkg.latestVersion || '—')}</span>`;
 
       const groupTag = grp !== 'main'
@@ -777,7 +842,12 @@
 
       const releaseDateDisplay = formatReleaseDate(pkg.releaseDate);
 
+      const pinBtn = pkg.installedVersion && pkg.source
+        ? `<button class="pin-btn" data-name="${esc(pkg.name)}" data-version="${esc(pkg.installedVersion)}" data-source="${esc(pkg.source)}" title="Pin to ==${esc(pkg.installedVersion)}">📌 Pin</button>`
+        : '';
+
       tr.innerHTML = `
+        <td class="col-check"><input type="checkbox" class="pkg-check" data-name="${esc(pkg.name)}" ${isSelected ? 'checked' : ''}></td>
         <td>
           <div class="pkg-name">
             <span class="pkg-name-link" data-name="${esc(pkg.name)}">${esc(pkg.name)}</span>
@@ -788,7 +858,7 @@
             ${!pkg.isUsed ? `<span class="inline-tag unused" title="No import found in project">&#x2298; unused?</span>` : ''}
           </div>
         </td>
-        <td><span class="ver">${esc(pkg.installedVersion || '—')}</span></td>
+        <td><span class="ver" data-copy="${esc(pkg.installedVersion || '')}" title="Click to copy" style="cursor:pointer">${esc(pkg.installedVersion || '—')}</span></td>
         <td>${latestDisplay}</td>
         <td>${statusBadge(pkg.status)}</td>
         <td><span style="font-size:11px;color:var(--vscode-descriptionForeground)">${esc(releaseDateDisplay)}</span></td>
@@ -797,6 +867,7 @@
             ${hasUpdate    ? `<button class="action-btn success btn-update"  data-name="${esc(pkg.name)}" title="Update to ${esc(pkg.latestVersion)}">&#x2B06; Update</button>` : ''}
             ${notInstalled ? `<button class="action-btn primary btn-install" data-name="${esc(pkg.name)}" title="Install ${esc(pkg.name)}">&#x2B07; Install</button>` : ''}
             ${hasHistory && !notInstalled ? `<button class="action-btn secondary btn-rollback" data-name="${esc(pkg.name)}" title="Rollback">&#x21A9; Rollback</button>` : ''}
+            ${pinBtn}
             ${!pkg.isUsed && pkg.source ? `<button class="action-btn danger btn-remove-req" data-name="${esc(pkg.name)}" data-source="${esc(pkg.source)}" title="Remove from ${esc(pkg.source)}">&#x1F5D1; Remove</button>` : ''}
           </div>
         </td>
@@ -806,6 +877,37 @@
     });
 
     // Attach row events after insert
+    elTableBody.querySelectorAll('.pkg-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          selectedPackages.add(cb.dataset.name);
+        } else {
+          selectedPackages.delete(cb.dataset.name);
+        }
+        updateBulkBar();
+      });
+    });
+
+    elTableBody.querySelectorAll('[data-copy]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        const text = el.dataset.copy;
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => showToast('✓ Copied to clipboard')).catch(() => {});
+      });
+    });
+
+    elTableBody.querySelectorAll('.pin-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        vscode.postMessage({
+          type: 'pinVersion',
+          name: btn.dataset.name,
+          version: btn.dataset.version,
+          source: btn.dataset.source,
+        });
+      });
+    });
+
     elTableBody.querySelectorAll('.pkg-name-link').forEach(el => {
       el.addEventListener('click', () => {
         const pkg = allPackages.find(p => p.name === el.dataset.name);
@@ -1027,9 +1129,27 @@
 
     const pypiLinkHtml = `<div class="field"><label>PyPI Page</label><div class="field-value"><span style="cursor:pointer;color:var(--vscode-textLink-foreground)" class="detail-pypi-link" data-name="${esc(pkg.name)}">${esc(pkg.name)} &#x2197;</span></div></div>`;
 
+    const metaGridHtml = `
+      <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">License</div>
+          <div class="detail-meta-value">${esc(pkg.license || '—')}</div>
+        </div>
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">Python Requires</div>
+          <div class="detail-meta-value">${esc(pkg.pythonRequires || '—')}</div>
+        </div>
+        <div class="detail-meta-item" style="grid-column:1/-1">
+          <div class="detail-meta-label">Weekly Downloads</div>
+          <div class="detail-meta-value">${pkg.weeklyDownloads > 0 ? pkg.weeklyDownloads.toLocaleString() : '—'}</div>
+        </div>
+      </div>
+    `;
+
     elDetailBody.innerHTML = `
       <div class="field"><label>Status</label><div class="field-value">${statusBadge(pkg.status)}</div></div>
       ${pkg.summary ? `<div class="field"><label>Summary</label><div class="field-value" style="color:var(--vscode-descriptionForeground)">${esc(pkg.summary)}</div></div>` : ''}
+      ${metaGridHtml}
       <div class="field"><label>Installed version</label><div class="field-value ver">${esc(pkg.installedVersion || 'Not installed')}</div></div>
       <div class="field"><label>Latest version</label><div class="field-value ver">${esc(pkg.latestVersion || '—')}</div></div>
       ${releaseDateHtml}

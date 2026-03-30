@@ -1,31 +1,27 @@
-# 📦 Python Package Visualizer
+# Python Package Visualizer
 
-> A VS Code extension to **visualize, manage and audit Python workspace dependencies** — with version checks, CVE security badges, unused package detection, dependency graph, and one-click updates.
+> Visualize, manage, and audit your Python workspace dependencies — all from inside VS Code.
 
-[![VS Code](https://img.shields.io/badge/VS%20Code-Extension-blue?logo=visualstudiocode)](https://code.visualstudio.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange)](https://github.com/Elanchezhiyan-P/python-package-visualizer/releases)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![VS Code](https://img.shields.io/badge/vscode-%5E1.85.0-blue)
 
----
+## Features
 
-## ✨ Features
-
-| Feature | Description |
-|---|---|
-| 📋 **Package List** | See installed vs. latest versions with status badges |
-| ⬆️ **Update / Rollback** | One-click update or rollback to any previous version |
-| 🔒 **CVE Security Badges** | Vulnerability flags pulled from the PyPI advisory database |
-| 🔍 **Unused Package Detection** | Static import analysis across all `.py` files in your workspace |
-| 🕸️ **Dependency Graph** | Interactive D3.js tree showing package dependencies |
-| 📜 **Update History** | Timeline of all installs, updates and rollbacks |
-| 📤 **Export Report** | Export your package status as Markdown or JSON |
-| ➕ **Add Package** | Search PyPI and install new packages directly |
-| 🗑️ **Remove from requirements** | Delete unused entries from your requirements file |
-| 🌐 **Clickable PyPI Links** | Open any package's PyPI page in your browser |
-| 🐍 **Virtual Env Detection** | Automatically uses `.venv`, `venv`, `env` if present |
-| 🔄 **Auto-sync requirements** | Updates version pins in requirements files after every change |
-
----
+- 📦 **Package List** — View all installed packages with installed vs latest versions
+- ⚠️ **Update Detection** — See which packages have updates available at a glance
+- 🔴 **CVE Vulnerability Badges** — Security vulnerabilities flagged from PyPI advisory database
+- 🔍 **Unused Package Detection** — Static import analysis across all `.py` files
+- 🕸️ **Dependency Graph** — Interactive D3.js tree with collapsible nodes
+- 🕒 **Update History** — Timeline of all installs, updates and rollbacks
+- 📤 **Export Reports** — Export package status as Markdown or JSON
+- 📌 **Pin Versions** — Lock packages to their current version in requirements.txt
+- ➕ **Add Packages** — Search PyPI and install new packages directly
+- 🗂️ **Group Detection** — Auto-detects dev/test/docs/lint dependency groups
+- 🌐 **Multi-root Workspace** — Scans all workspace folders automatically
+- 🔒 **License Info** — Displays package license type
+- 🐍 **Python Version Compatibility** — Shows required Python version per package
+- 📊 **Download Stats** — Weekly PyPI download counts
 
 ## 🚀 Getting Started
 

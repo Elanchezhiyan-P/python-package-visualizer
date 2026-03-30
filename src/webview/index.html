@@ -715,8 +715,40 @@
       gap:             12px;
       color:           var(--vscode-descriptionForeground);
     }
-    #empty-state .empty-icon { font-size: 48px; opacity: .6; }
-    #empty-state p { font-size: 13px; max-width: 320px; text-align: center; line-height: 1.6; }
+    #empty-state .empty-icon { font-size: 52px; opacity: .5; margin-bottom: 4px; }
+    #empty-state .empty-title {
+      font-size: 16px; font-weight: 700;
+      color: var(--vscode-foreground); margin-bottom: 4px;
+    }
+    #empty-state p { font-size: 13px; max-width: 340px; text-align: center; line-height: 1.6; margin: 0; }
+    .empty-files {
+      display: flex; flex-direction: column; gap: 8px;
+      margin: 12px 0; width: 100%; max-width: 360px;
+    }
+    .empty-file-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 8px;
+    }
+    .empty-file-icon { font-size: 18px; flex-shrink: 0; }
+    .empty-file-item code {
+      font-size: 12px; font-weight: 600;
+      color: var(--vscode-foreground);
+      display: block; margin-bottom: 2px;
+    }
+    .empty-file-desc {
+      font-size: 11px; color: var(--vscode-descriptionForeground);
+    }
+    .empty-actions { margin-top: 8px; }
+    .empty-btn {
+      padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      font-size: 13px; font-family: inherit;
+    }
+    .empty-btn:hover { opacity: .85; }
 
     /* ── Overlay (click outside detail) ─────────────── */
     #overlay {
@@ -1053,6 +1085,56 @@
       text-decoration: none;
     }
     .pkg-ext-link:hover { opacity: 1; }
+
+    /* ── Bulk action bar ────────────────────────── */
+    #bulk-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: var(--vscode-editor-selectionBackground);
+      border-bottom: 1px solid var(--vscode-panel-border);
+      font-size: 12px;
+    }
+    #bulk-bar.visible { display: flex; }
+    #bulk-count { font-weight: 600; color: var(--vscode-foreground); }
+    .bulk-btn {
+      padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer;
+      font-size: 11px; font-family: inherit;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .bulk-btn.danger { background: rgba(248,113,113,.2); color: #f87171; }
+    /* ── Checkboxes ─────────────────────────────── */
+    .pkg-check { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+    .col-check { width: 36px; text-align: center; }
+    /* ── Pin button ─────────────────────────────── */
+    .pin-btn {
+      background: none; border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px; padding: 3px 7px; cursor: pointer;
+      font-size: 11px; color: var(--vscode-descriptionForeground);
+    }
+    .pin-btn:hover { color: var(--vscode-foreground); border-color: var(--vscode-foreground); }
+    /* ── Copy toast ─────────────────────────────── */
+    #copy-toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--vscode-notificationCenterHeader-background, #333);
+      color: var(--vscode-foreground); padding: 8px 18px; border-radius: 20px;
+      font-size: 12px; z-index: 999; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #copy-toast.show { opacity: 1; }
+    /* ── Detail extras ──────────────────────────── */
+    .detail-meta-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;
+    }
+    .detail-meta-item {
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px; padding: 8px 12px;
+    }
+    .detail-meta-label { font-size: 10px; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.5px; }
+    .detail-meta-value { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -1171,8 +1253,34 @@
     <!-- Empty State -->
     <div id="empty-state">
       <div class="empty-icon">&#x1F4E6;</div>
-      <p>No packages found.<br/>Open a Python project that contains a
-        <code>requirements.txt</code>, <code>pyproject.toml</code>, or <code>setup.py</code>.</p>
+      <div class="empty-title">No Python packages found</div>
+      <p>This workspace doesn't contain any recognized dependency file.</p>
+      <div class="empty-files">
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>requirements.txt</code>
+            <span class="empty-file-desc">Standard pip dependency file</span>
+          </div>
+        </div>
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>pyproject.toml</code>
+            <span class="empty-file-desc">Modern Python project config (Poetry, Hatch)</span>
+          </div>
+        </div>
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>setup.py</code>
+            <span class="empty-file-desc">Legacy setuptools config</span>
+          </div>
+        </div>
+      </div>
+      <div class="empty-actions">
+        <button class="empty-btn" onclick="document.getElementById('btn-refresh').click()">&#x21BB; Refresh</button>
+      </div>
     </div>
 
     <!-- Dependency Graph -->
@@ -1214,11 +1322,19 @@
       </div>
     </div>
 
+    <!-- Bulk Action Bar -->
+    <div id="bulk-bar">
+      <span id="bulk-count">0 selected</span>
+      <button class="bulk-btn" id="bulk-update">↑ Update Selected</button>
+      <button class="bulk-btn danger" id="bulk-deselect">✕ Deselect All</button>
+    </div>
+
     <!-- Package List -->
     <div id="view-list">
       <table>
         <thead>
           <tr>
+            <th class="col-check"><input type="checkbox" id="check-all" title="Select all"></th>
             <th data-col="name" class="sorted sort-asc">
               <span class="th-inner">
                 Package
@@ -1296,6 +1412,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Copy Toast -->
+  <div id="copy-toast">✓ Copied to clipboard</div>
 
   <!-- Overlay -->
   <div id="overlay"></div>

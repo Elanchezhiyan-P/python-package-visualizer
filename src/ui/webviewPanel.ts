@@ -43,6 +43,9 @@ export interface PackageDisplayData {
   vulnerabilities: VulnerabilityInfo[];
   releaseDate: string;
   group: string;
+  license?: string;
+  pythonRequires?: string;
+  weeklyDownloads?: number;
 }
 
 export class WebviewPanel {
@@ -176,6 +179,9 @@ export class WebviewPanel {
         vulnerabilities: result?.vulnerabilities ?? [],
         releaseDate: result?.releaseDate ?? '',
         group: pkg.group ?? 'main',
+        license: result?.license ?? '',
+        pythonRequires: result?.pythonRequires ?? '',
+        weeklyDownloads: result?.weeklyDownloads ?? 0,
       };
     });
   }

@@ -22,6 +22,8 @@ export interface PyPIPackageInfo {
   homePage: string;
   fetchedAt: number;
   releaseFiles?: Record<string, Array<{ yanked: boolean; upload_time?: string }>>;
+  license?: string;
+  pythonRequires?: string;
 }
 
 export interface VersionCheckResult {
@@ -34,6 +36,9 @@ export interface VersionCheckResult {
   homePage: string;
   vulnerabilities: VulnerabilityInfo[];
   releaseDate?: string;
+  license?: string;
+  pythonRequires?: string;
+  weeklyDownloads?: number;
 }
 
 interface PyPIAPIResponse {
@@ -43,6 +48,8 @@ interface PyPIAPIResponse {
     summary: string;
     home_page: string;
     project_url: string;
+    license?: string;
+    requires_python?: string;
   };
   releases: Record<string, Array<{ yanked: boolean; upload_time?: string }>>;
   vulnerabilities?: Array<{
@@ -108,6 +115,8 @@ export class VersionChecker {
       homePage: info.homePage,
       vulnerabilities,
       releaseDate,
+      license: info.license ?? '',
+      pythonRequires: info.pythonRequires ?? '',
     };
   }
 
@@ -130,6 +139,21 @@ export class VersionChecker {
   clearCache(): void {
     pypiCache.clear();
     this.logger.info('PyPI cache cleared');
+  }
+
+  async fetchWeeklyDownloads(packageName: string): Promise<number> {
+    const url = `https://pypistats.org/api/packages/${encodeURIComponent(packageName.toLowerCase())}/recent`;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) { return 0; }
+      const data = (await response.json()) as { data?: { last_week?: number } };
+      return data.data?.last_week ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   private async fetchPyPIInfo(
@@ -233,6 +257,8 @@ export class VersionChecker {
       homePage: data.info.home_page ?? data.info.project_url ?? '',
       fetchedAt: Date.now(),
       releaseFiles: data.releases,
+      license: data.info.license ?? '',
+      pythonRequires: data.info.requires_python ?? '',
     };
   }
 

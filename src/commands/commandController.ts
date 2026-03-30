@@ -58,7 +58,7 @@ export class CommandController {
     );
 
     // Handle messages from webview panel (update / rollback / refresh buttons)
-    this.panel.onMessage(msg => {
+    this.panel.onMessage(async msg => {
       switch (msg.type) {
         case 'updatePackage':
           void this.updatePackage(msg.name);
@@ -93,6 +93,26 @@ export class CommandController {
             (msg as { type: string; name: string; source: string }).source
           );
           break;
+        case 'pinVersion': {
+          const m = msg as { type: string; name: string; version: string; source: string };
+          void this.pinVersion(m.name, m.version, m.source);
+          break;
+        }
+        case 'createRequirements':
+          void this.createRequirementsFile();
+          break;
+        case 'bulkUpdate': {
+          const m = msg as { type: string; names: string[] };
+          void this.updateAllPackages(m.names);
+          break;
+        }
+        case 'bulkRemove': {
+          const m = msg as { type: string; names: string[]; sources: string[] };
+          for (let i = 0; i < m.names.length; i++) {
+            await this.removeFromRequirements(m.names[i], m.sources[i] ?? '');
+          }
+          break;
+        }
       }
     });
 
@@ -141,10 +161,12 @@ export class CommandController {
     this.sidebar?.sendProgress('Scanning workspace...');
 
     try {
-      const [scanned, importResult] = await Promise.all([
-        this.scanner.scanWorkspace(root),
+      const roots = this.getAllWorkspaceRoots();
+      const [allScanned, importResult] = await Promise.all([
+        Promise.all(roots.map(r => this.scanner.scanWorkspace(r))).then(results => results.flat()),
         this.importScanner.scanImports(root),
       ]);
+      const scanned = allScanned;
 
       if (scanned.length === 0) {
         this.panel.sendProgress(
@@ -161,6 +183,21 @@ export class CommandController {
       const checkResults = await this.checker.checkAll(
         scanned.map(p => ({ name: p.name, installedVersion: p.installedVersion }))
       );
+
+      // Fetch weekly downloads for all packages (non-blocking, best effort)
+      const downloadsMap = new Map<string, number>();
+      await Promise.allSettled(
+        checkResults.map(async r => {
+          const dl = await this.checker.fetchWeeklyDownloads(r.packageName);
+          if (dl > 0) { downloadsMap.set(r.packageName, dl); }
+        })
+      );
+      // Merge downloads into checkResults
+      for (const r of checkResults) {
+        if (downloadsMap.has(r.packageName)) {
+          r.weeklyDownloads = downloadsMap.get(r.packageName);
+        }
+      }
 
       // Record currently-installed versions in history (detected)
       for (const pkg of scanned) {
@@ -616,6 +653,29 @@ export class CommandController {
     }
   }
 
+  async pinVersion(packageName: string, version: string, sourceFile: string): Promise<void> {
+    const root = this.getWorkspaceRoot();
+    if (!root || !version) { return; }
+    try {
+      await this.reqSync.syncVersion(root, packageName, version, sourceFile);
+      void vscode.window.showInformationMessage(`📌 Pinned ${packageName} to ==${version} in ${sourceFile}`);
+      await this.refreshVisualizer();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Failed to pin ${packageName}: ${String(err)}`);
+    }
+  }
+
+  async createRequirementsFile(): Promise<void> {
+    const root = this.getWorkspaceRoot();
+    if (!root) { return; }
+    const filePath = vscode.Uri.file(root + '/requirements.txt');
+    const content = '# Requirements\n# Add your dependencies here\n# Example: requests==2.31.0\n';
+    await vscode.workspace.fs.writeFile(filePath, Buffer.from(content, 'utf-8'));
+    const doc = await vscode.workspace.openTextDocument(filePath);
+    await vscode.window.showTextDocument(doc);
+    void vscode.window.showInformationMessage('Created requirements.txt — add your packages and refresh.');
+  }
+
   async removeFromRequirements(packageName: string, sourceFile: string): Promise<void> {
     const root = this.getWorkspaceRoot();
     if (!root) { return; }
@@ -628,7 +688,7 @@ export class CommandController {
     if (confirm !== 'Remove') { return; }
 
     try {
-      const removed = await this.requirementsSync.removePackage(root, packageName, sourceFile);
+      const removed = await this.reqSync.removePackage(root, packageName, sourceFile);
       if (removed) {
         void vscode.window.showInformationMessage(
           `Removed "${packageName}" from ${sourceFile}.`
@@ -691,6 +751,9 @@ export class CommandController {
         vulnerabilities: result?.vulnerabilities ?? [],
         releaseDate: result?.releaseDate ?? '',
         group: pkg.group ?? 'main',
+        license: result?.license ?? '',
+        pythonRequires: result?.pythonRequires ?? '',
+        weeklyDownloads: result?.weeklyDownloads ?? 0,
       };
     });
   }
@@ -723,9 +786,11 @@ export class CommandController {
 
   private getWorkspaceRoot(): string | null {
     const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-      return null;
-    }
+    if (!folders || folders.length === 0) { return null; }
     return folders[0].uri.fsPath;
+  }
+
+  private getAllWorkspaceRoots(): string[] {
+    return (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
   }
 }
