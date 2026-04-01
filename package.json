@@ -2,7 +2,7 @@
   "name": "python-package-visualizer",
   "displayName": "Python Package Visualizer",
   "description": "A VS Code extension to visualize, manage and audit Python workspace dependencies — with version checks, CVE badges, unused package detection, dependency graph, and one-click updates.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "Elanchezhiyan-P",
   "license": "MIT",
   "engines": {

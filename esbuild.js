@@ -26,7 +26,9 @@ async function build() {
   if (isWatch) {
     await ctx.watch();
     console.log('[esbuild] Watching for changes...');
-    // keep the process alive
+    const shutdown = async () => { await ctx.dispose(); process.exit(0); };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   } else {
     await ctx.rebuild();
     await ctx.dispose();

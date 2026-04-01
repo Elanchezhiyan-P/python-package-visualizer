@@ -8,52 +8,65 @@ import { SidebarProvider } from './ui/sidebarProvider.js';
 import { StatusBarManager } from './ui/statusBarManager.js';
 import { CommandController } from './commands/commandController.js';
 
+let _panel: WebviewPanel | undefined;
+
 export function activate(context: vscode.ExtensionContext): void {
   const logger = Logger.getInstance(context);
   logger.info('Python Package Visualizer activating...');
 
-  const scanner      = new PackageScanner(logger);
-  const checker      = new VersionChecker(logger, context);
-  const historyCache = new VersionHistoryCache(context, logger);
-  const panel        = new WebviewPanel(context, logger);
-  const sidebar      = new SidebarProvider(context, logger);
-  const statusBar    = new StatusBarManager();
+  try {
+    const scanner      = new PackageScanner(logger);
+    const checker      = new VersionChecker(logger, context);
+    const historyCache = new VersionHistoryCache(context, logger);
+    const panel        = new WebviewPanel(context, logger);
+    const sidebar      = new SidebarProvider(context, logger);
+    const statusBar    = new StatusBarManager();
 
-  // Register the sidebar webview view provider
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      'pythonPackageVisualizer.sidebar',
-      sidebar
-    )
-  );
+    _panel = panel;
 
-  // Dispose status bar when extension is deactivated
-  context.subscriptions.push(statusBar);
+    // Register the sidebar webview view provider
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        'pythonPackageVisualizer.sidebar',
+        sidebar
+      )
+    );
 
-  const controller = new CommandController(
-    context,
-    logger,
-    scanner,
-    checker,
-    historyCache,
-    panel,
-    sidebar,
-    statusBar
-  );
+    // Dispose status bar when extension is deactivated
+    context.subscriptions.push(statusBar);
 
-  controller.registerAll();
+    const controller = new CommandController(
+      context,
+      logger,
+      scanner,
+      checker,
+      historyCache,
+      panel,
+      sidebar,
+      statusBar
+    );
 
-  // Auto-check on open if configured
-  const config = vscode.workspace.getConfiguration('pythonPackageVisualizer');
-  if (config.get<boolean>('autoCheckOnOpen', true)) {
-    setImmediate(() => {
-      void controller.triggerAutoCheck();
-    });
+    controller.registerAll();
+
+    // Auto-check on open if configured
+    const config = vscode.workspace.getConfiguration('pythonPackageVisualizer');
+    if (config.get<boolean>('autoCheckOnOpen', true)) {
+      setImmediate(() => {
+        void controller.triggerAutoCheck();
+      });
+    }
+
+    logger.info('Python Package Visualizer activated.');
+  } catch (err) {
+    logger.error(`Activation failed: ${String(err)}`);
+    void vscode.window.showErrorMessage(
+      `Python Package Visualizer failed to activate: ${String(err)}. Check the Output panel for details.`
+    );
   }
-
-  logger.info('Python Package Visualizer activated.');
 }
 
 export function deactivate(): void {
+  _panel?.dispose();
+  _panel = undefined;
   Logger.resetInstance();
 }
