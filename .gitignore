@@ -9,3 +9,6 @@ dist/
 Thumbs.db
 *.log
 .cache/
+.vscode/tasks.json
+.vscode/launch.json
+.claude/settings.local.json

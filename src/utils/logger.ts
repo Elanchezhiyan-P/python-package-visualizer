@@ -36,6 +36,7 @@ export class Logger {
 
   error(msg: string): void {
     this.log('ERROR', msg);
+    this.channel.show(true);
   }
 
   show(): void {

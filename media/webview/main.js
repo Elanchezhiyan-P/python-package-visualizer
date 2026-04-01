@@ -590,10 +590,18 @@
     if (!canvas) return;
     canvas.innerHTML = '';
     _graphZoom = null; _graphSvg = null; _graphFitFn = null;
+
+    if (typeof d3 === 'undefined') {
+      canvas.innerHTML = '<div style="padding:40px;text-align:center;color:var(--vscode-descriptionForeground)">Dependency graph unavailable: could not load the d3 library. Check your internet connection and reload.</div>';
+      return;
+    }
+
     if (!packages.length) {
       canvas.innerHTML = '<div style="padding:40px;text-align:center;color:var(--vscode-descriptionForeground)">No packages to display.</div>';
       return;
     }
+
+    try {
 
     // ── Build hierarchy ──────────────────────────────────────────────────
     const treeData = {
@@ -783,6 +791,10 @@
     `;
     canvas.style.position = 'relative';
     canvas.appendChild(legend);
+    } catch (err) {
+      console.error('renderGraph error:', err);
+      canvas.innerHTML = '<div style="padding:40px;text-align:center;color:var(--vscode-errorForeground)">Error rendering dependency graph. Please refresh.</div>';
+    }
   }
 
   // ── Graph toolbar buttons ─────────────────────────────────────────────────
@@ -808,6 +820,7 @@
   }
 
   function renderTable(packages) {
+    try {
     elTableBody.innerHTML = '';
 
     if (!packages.length) {
@@ -893,7 +906,7 @@
         e.stopPropagation();
         const text = el.dataset.copy;
         if (!text) return;
-        navigator.clipboard.writeText(text).then(() => showToast('✓ Copied to clipboard')).catch(() => {});
+        navigator.clipboard.writeText(text).then(() => showToast('✓ Copied to clipboard')).catch(() => showToast('⚠ Copy failed'));
       });
     });
 
@@ -965,6 +978,10 @@
         });
       });
     });
+    } catch (err) {
+      console.error('renderTable error:', err);
+      elTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--vscode-errorForeground)">Error rendering package list. Please refresh.</td></tr>`;
+    }
   }
 
   // ── Unused Packages Tab ───────────────────────────────────────────────────

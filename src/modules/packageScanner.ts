@@ -42,11 +42,14 @@ export class PackageScanner {
     }
 
     // Overlay with installed versions from pip
-    const installed = await this.getPipInstalledVersions(workspaceRoot);
-    const pipDetails = await this.getPipShowDetails(
-      [...packages.keys()],
-      workspaceRoot
-    );
+    const installed = await this.getPipInstalledVersions(workspaceRoot).catch(err => {
+      this.logger.error(`pip list unavailable — installed versions will not be shown: ${String(err)}`);
+      return new Map<string, string>();
+    });
+    const pipDetails = await this.getPipShowDetails([...packages.keys()], workspaceRoot).catch(err => {
+      this.logger.error(`pip show unavailable — dependency details will not be shown: ${String(err)}`);
+      return new Map<string, { requires: string[] }>();
+    });
 
     for (const [name, pkg] of packages) {
       pkg.installedVersion = installed.get(name) ?? '';
@@ -340,21 +343,32 @@ export class PackageScanner {
   private getPipInstalledVersions(
     cwd: string
   ): Promise<Map<string, string>> {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       const python = this.resolvePythonPath();
-      const cmd = `"${python}" -m pip list --format=json`;
+      const args = ['-m', 'pip', 'list', '--format=json'];
 
-      this.logger.debug(`Running: ${cmd}`);
-      cp.exec(cmd, { cwd, timeout: 30_000 }, (err, stdout) => {
-        if (err) {
-          this.logger.warn(`pip list failed: ${err.message}`);
-          return resolve(new Map());
+      this.logger.debug(`Running: ${python} ${args.join(' ')}`);
+      const child = cp.spawn(python, args, { cwd });
+
+      let stdout = '';
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill();
+      }, 30_000);
+
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (timedOut) {
+          return reject(new Error('pip list timed out'));
+        }
+        if (code !== 0) {
+          return reject(new Error(`pip list exited with code ${code}`));
         }
         try {
-          const entries = JSON.parse(stdout) as Array<{
-            name: string;
-            version: string;
-          }>;
+          const entries = JSON.parse(stdout) as Array<{ name: string; version: string }>;
           const map = new Map<string, string>();
           for (const e of entries) {
             map.set(this.normalizeName(e.name), e.version);
@@ -364,6 +378,11 @@ export class PackageScanner {
           this.logger.warn('Failed to parse pip list output');
           resolve(new Map());
         }
+      });
+
+      child.on('error', (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
       });
     });
   }
@@ -376,47 +395,63 @@ export class PackageScanner {
       return Promise.resolve(new Map());
     }
 
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       const python = this.resolvePythonPath();
-      const names = packageNames.join(' ');
-      const cmd = `"${python}" -m pip show ${names}`;
+      const args = ['-m', 'pip', 'show', ...packageNames];
 
-      this.logger.debug(`Running: ${cmd}`);
-      cp.exec(
-        cmd,
-        { cwd, timeout: 30_000, maxBuffer: 1024 * 1024 * 10 },
-        (err, stdout) => {
-          if (err && !stdout) {
-            this.logger.warn(`pip show failed: ${err.message}`);
-            return resolve(new Map());
-          }
+      this.logger.debug(`Running: ${python} ${args.join(' ')}`);
+      const child = cp.spawn(python, args, { cwd });
 
-          const map = new Map<string, { requires: string[] }>();
-          // pip show output is separated by "---" lines
-          const blocks = stdout.split(/^---$/m);
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill();
+      }, 30_000);
 
-          for (const block of blocks) {
-            const nameMatch = block.match(/^Name:\s*(.+)$/m);
-            const reqMatch = block.match(/^Requires:\s*(.*)$/m);
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+      child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
-            if (!nameMatch) {
-              continue;
-            }
-            const name = this.normalizeName(nameMatch[1].trim());
-            const requires =
-              reqMatch && reqMatch[1].trim()
-                ? reqMatch[1]
-                    .split(',')
-                    .map(r => this.normalizeName(r.trim()))
-                    .filter(r => r.length > 0)
-                : [];
-
-            map.set(name, { requires });
-          }
-
-          resolve(map);
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (timedOut) {
+          return reject(new Error('pip show timed out'));
         }
-      );
+        if (code !== 0 && !stdout) {
+          return reject(new Error(`pip show failed (exit ${code}): ${stderr.trim()}`));
+        }
+
+        const map = new Map<string, { requires: string[] }>();
+        // pip show output is separated by "---" lines
+        const blocks = stdout.split(/^---$/m);
+
+        for (const block of blocks) {
+          const nameMatch = block.match(/^Name:\s*(.+)$/m);
+          const reqMatch = block.match(/^Requires:\s*(.*)$/m);
+
+          if (!nameMatch) {
+            continue;
+          }
+          const name = this.normalizeName(nameMatch[1].trim());
+          const requires =
+            reqMatch && reqMatch[1].trim()
+              ? reqMatch[1]
+                  .split(',')
+                  .map(r => this.normalizeName(r.trim()))
+                  .filter(r => r.length > 0)
+              : [];
+
+          map.set(name, { requires });
+        }
+
+        resolve(map);
+      });
+
+      child.on('error', (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
   }
 
