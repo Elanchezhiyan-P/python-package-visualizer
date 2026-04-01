@@ -73,7 +73,7 @@ export class WebviewPanel {
       {
         enableScripts: true,
         localResourceRoots: [
-          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview'),
+          vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webview'),
         ],
         retainContextWhenHidden: true,
       }
@@ -219,7 +219,7 @@ export class WebviewPanel {
   private getHtml(webview: vscode.Webview): string {
     const htmlPath = path.join(
       this.context.extensionUri.fsPath,
-      'src',
+      'media',
       'webview',
       'index.html'
     );
@@ -229,7 +229,7 @@ export class WebviewPanel {
     const mainJsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this.context.extensionUri,
-        'src',
+        'media',
         'webview',
         'main.js'
       )
