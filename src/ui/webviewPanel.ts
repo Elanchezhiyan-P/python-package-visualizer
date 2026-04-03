@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '../utils/logger.js';
 import type { VersionCheckResult, VulnerabilityInfo } from '../services/versionChecker.js';
-import type { ScannedPackage } from '../modules/packageScanner.js';
+import type { ScannedPackage, ConflictInfo } from '../modules/packageScanner.js';
 export interface HistoryDisplayEntry {
   packageName: string;
   version: string;
@@ -20,7 +20,12 @@ export type WebviewMessage =
   | { type: 'openUrl'; url: string }
   | { type: 'installNew'; name: string; version?: string }
   | { type: 'searchPypi'; query: string }
-  | { type: 'exportReport'; format: 'markdown' | 'json' };
+  | { type: 'exportReport'; format: 'markdown' | 'json' }
+  | { type: 'removeFromRequirements'; name: string; source: string }
+  | { type: 'pinVersion'; name: string; version: string; source: string }
+  | { type: 'createRequirements' }
+  | { type: 'bulkUpdate'; names: string[] }
+  | { type: 'bulkRemove'; names: string[]; sources: string[] };
 
 export interface ScanStats {
   filesScanned: number;
@@ -201,6 +206,12 @@ export class WebviewPanel {
   /** Expose the underlying vscode.Webview for direct postMessage calls */
   get webview(): vscode.Webview | undefined {
     return this.panel?.webview;
+  }
+
+  /** Send dependency conflict results to the webview */
+  sendConflicts(conflicts: ConflictInfo[]): void {
+    if (!this.panel) { return; }
+    void this.panel.webview.postMessage({ type: 'conflicts', conflicts });
   }
 
   /** Send version history entries to the webview */

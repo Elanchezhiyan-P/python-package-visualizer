@@ -126,13 +126,6 @@
       background: var(--vscode-button-secondaryHoverBackground);
     }
 
-    #btn-update-all {
-      display:    none;
-      background: #166534;
-      color:      #bbf7d0;
-    }
-    #btn-update-all:hover:not(:disabled) { background: #15803d; }
-
     /* ── Toolbar ─────────────────────────────────────── */
     #toolbar {
       display:   flex;
@@ -187,6 +180,11 @@
       outline:      none;
       border-color: var(--vscode-focusBorder);
     }
+    .toolbar-select.active {
+      border-color: color-mix(in srgb, var(--vscode-focusBorder) 70%, transparent);
+      color:        var(--vscode-button-background);
+      font-weight:  500;
+    }
 
     /* ── Stats Cards ─────────────────────────────────── */
     #stats-bar {
@@ -208,13 +206,20 @@
       font-size:    11px;
       font-weight:  500;
       cursor:       default;
-      transition:   background var(--ease);
+      transition:   background var(--ease), box-shadow var(--ease), filter var(--ease);
       user-select:  none;
     }
-    .stat-card.ok      { background: var(--c-ok-bg);     color: var(--c-ok); }
-    .stat-card.update  { background: var(--c-update-bg);  color: var(--c-update); }
-    .stat-card.unknown { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .stat-card.vuln    { background: var(--c-vuln-bg);    color: var(--c-vuln); }
+    .stat-card.clickable { cursor: pointer; }
+    .stat-card.clickable:hover { filter: brightness(1.15); }
+    .stat-card.clickable.selected {
+      box-shadow: 0 0 0 2px currentColor;
+      filter: brightness(1.1);
+    }
+    .stat-card.ok       { background: var(--c-ok-bg);     color: var(--c-ok); }
+    .stat-card.update   { background: var(--c-update-bg);  color: var(--c-update); }
+    .stat-card.unknown  { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .stat-card.vuln     { background: var(--c-vuln-bg);    color: var(--c-vuln); }
+    .stat-card.conflict { background: rgba(249,115,22,.13); color: #f97316; }
 
     .stat-num {
       font-size:   14px;
@@ -332,8 +337,32 @@
     /* Row left-border accent by status */
     tbody tr.row-update-available { border-left-color: var(--c-update); }
     tbody tr.row-up-to-date        { border-left-color: var(--c-ok); }
-    tbody tr.row-vulnerable        { border-left-color: var(--c-vuln); }
+    tbody tr.row-vulnerable        { border-left-color: var(--c-vuln); background: rgba(248,113,113,.03); }
+    tbody tr.row-conflict          { border-left-color: #f97316; background: rgba(249,115,22,.03); }
     tbody tr.row-not-installed     { border-left-color: var(--c-missing); }
+
+    /* ── Install/Update row progress bar ────────────────── */
+    tbody tr { position: relative; overflow: hidden; }
+    tbody tr[data-progress]::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px;
+      width: var(--row-progress, 0%);
+      background: var(--vscode-button-background);
+      transition: width 0.4s ease;
+    }
+    tbody tr[data-progress] .progress-stage {
+      display: inline-block;
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-left: 6px;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
 
     /* ── List View ───────────────────────────────────── */
     #view-list {
@@ -367,8 +396,18 @@
     }
 
     /* Version cells */
-    .ver { font-variant-numeric: tabular-nums; font-size: 12px; }
+    .ver { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
     .ver-latest { color: var(--c-ok); font-weight: 500; }
+    .copy-hint {
+      font-size: 9px;
+      opacity: 0;
+      margin-left: 3px;
+      transition: opacity .12s;
+      color: var(--vscode-textLink-foreground);
+      pointer-events: none;
+      user-select: none;
+    }
+    td:hover .copy-hint { opacity: .55; }
 
     /* ── Badges ──────────────────────────────────────── */
     .badge {
@@ -397,8 +436,9 @@
       border-radius: 3px;
       white-space:  nowrap;
     }
-    .inline-tag.unused  { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .inline-tag.cve     { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
+    .inline-tag.unused    { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .inline-tag.cve       { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
+    .inline-tag.conflict  { background: rgba(249,115,22,.15); color: #f97316; font-weight: 700; }
 
     /* ── Action buttons ──────────────────────────────── */
     .act-group { display: flex; gap: 5px; align-items: center; }
@@ -435,10 +475,12 @@
       background: var(--vscode-button-hoverBackground);
     }
     .action-btn.success {
-      background: #14532d;
-      color:      #bbf7d0;
+      background: var(--c-ok-bg);
+      color:      var(--c-ok);
     }
-    .action-btn.success:hover:not(:disabled) { background: #166534; }
+    .action-btn.success:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--c-ok) 22%, transparent);
+    }
     .action-btn.danger {
       background: rgba(248,113,113,.15);
       color:      var(--c-vuln);
@@ -489,7 +531,7 @@
       border: 1px solid var(--vscode-panel-border);
       border-radius: var(--radius);
       padding: 10px 14px;
-      font-size: 11px;
+      font-size: 12px;
       display: flex;
       flex-direction: column;
       gap: 5px;
@@ -1135,6 +1177,56 @@
     }
     .detail-meta-label { font-size: 10px; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.5px; }
     .detail-meta-value { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); margin-top: 2px; }
+
+    /* ── Sticky table header ─────────────────────────── */
+    #view-list table thead th {
+      position:   sticky;
+      top:        0;
+      z-index:    5;
+      background: var(--vscode-sideBar-background);
+      box-shadow: 0 1px 0 var(--vscode-panel-border);
+    }
+
+    /* ── Button inline spinner ───────────────────────── */
+    .btn-spinner {
+      display:       inline-block;
+      width:         10px; height: 10px;
+      border:        1.5px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation:     spin .65s linear infinite;
+      vertical-align: middle;
+      flex-shrink:   0;
+    }
+
+    /* ── Filtered result count ───────────────────────── */
+    #result-count {
+      font-size:     11px;
+      color:         var(--vscode-descriptionForeground);
+      padding:       4px 18px;
+      flex-shrink:   0;
+      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+      background:    var(--vscode-editor-background);
+      min-height:    24px;
+      display:       flex;
+      align-items:   center;
+      gap:           6px;
+    }
+    #result-count:empty { display: none; }
+    .result-count-filter-active {
+      color:       var(--vscode-button-background);
+      font-weight: 500;
+    }
+    #result-count-clear {
+      font-size:   10px;
+      cursor:      pointer;
+      opacity:     .7;
+      padding:     1px 5px;
+      border-radius: 3px;
+      background:  color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
+      transition:  opacity var(--ease), background var(--ease);
+    }
+    #result-count-clear:hover { opacity: 1; background: color-mix(in srgb, var(--vscode-panel-border) 80%, transparent); }
   </style>
 </head>
 <body>
@@ -1149,9 +1241,6 @@
       </div>
     </div>
     <div id="header-actions">
-      <button id="btn-update-all" class="hdr-btn" title="Update all outdated packages">
-        &#x2191; Update All
-      </button>
       <button id="btn-add-pkg" class="hdr-btn" title="Install a new package">&#xFF0B; Add Package</button>
       <div id="export-wrap">
         <button id="btn-export" class="hdr-btn" title="Export report">
@@ -1208,25 +1297,30 @@
 
   <!-- Stats Bar -->
   <div id="stats-bar">
-    <span class="stat-card ok">
+    <span class="stat-card ok clickable" id="stat-ok-card" data-filter="up-to-date" title="Click to filter">
       <span>✅</span>
       <span class="stat-num" id="stat-ok">0</span>
       <span>up to date</span>
     </span>
-    <span class="stat-card update">
+    <span class="stat-card update clickable" id="stat-update-card" data-filter="update-available" title="Click to filter">
       <span>⬆️</span>
       <span class="stat-num" id="stat-update">0</span>
       <span>updates available</span>
     </span>
-    <span class="stat-card unknown">
+    <span class="stat-card unknown clickable" id="stat-unknown-card" data-filter="unknown" title="Click to filter">
       <span>❓</span>
       <span class="stat-num" id="stat-unknown">0</span>
       <span>unknown</span>
     </span>
-    <span class="stat-card vuln" id="stat-vuln-card" style="display:none">
+    <span class="stat-card vuln clickable" id="stat-vuln-card" data-filter="vuln" title="Click to filter" style="display:none">
       <span>&#x1F534;</span>
       <span class="stat-num" id="stat-vuln">0</span>
       <span>vulnerable</span>
+    </span>
+    <span class="stat-card conflict clickable" id="stat-conflict-card" data-filter="conflict" title="Click to filter" style="display:none">
+      <span>&#x26A1;</span>
+      <span class="stat-num" id="stat-conflict">0</span>
+      <span>conflicts</span>
     </span>
     <span class="stat-card unknown" id="stat-groups-card" style="display:none; font-size:10px; padding:4px 10px;">
       <span id="stat-groups-text"></span>
@@ -1331,6 +1425,7 @@
 
     <!-- Package List -->
     <div id="view-list">
+      <div id="result-count"></div>
       <table>
         <thead>
           <tr>

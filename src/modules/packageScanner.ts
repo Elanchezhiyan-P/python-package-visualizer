@@ -7,6 +7,14 @@ import { Logger } from '../utils/logger.js';
 
 export type DepFileType = 'requirements.txt' | 'pyproject.toml' | 'setup.py';
 
+export interface ConflictInfo {
+  package: string;
+  version: string;
+  requirement: string;
+  conflictingPackage: string;
+  conflictingVersion: string;
+}
+
 export interface ScannedPackage {
   name: string;
   specifiedVersion: string;
@@ -18,7 +26,32 @@ export interface ScannedPackage {
 }
 
 export class PackageScanner {
+  // Cached uv detection: undefined = not checked yet, null = not available, 'uv' = available
+  private uvPathPromise: Promise<string | null> | undefined = undefined;
+
   constructor(private readonly logger: Logger) {}
+
+  /** Returns 'uv' if uv is available in PATH, null otherwise. Result is cached. */
+  public resolveUvPath(cwd: string): Promise<string | null> {
+    if (!this.uvPathPromise) {
+      this.uvPathPromise = this.detectUv(cwd).then(p => {
+        this.logger.info(`uv ${p ? 'detected — using uv pip' : 'not found — using pip'}`);
+        return p;
+      });
+    }
+    return this.uvPathPromise;
+  }
+
+  private detectUv(cwd: string): Promise<string | null> {
+    return new Promise(resolve => {
+      let resolved = false;
+      const done = (val: string | null) => { if (!resolved) { resolved = true; resolve(val); } };
+      const timer = setTimeout(() => { child.kill(); done(null); }, 5_000);
+      const child = cp.spawn('uv', ['--version'], { cwd });
+      child.on('close', (code: number | null) => { clearTimeout(timer); done(code === 0 ? 'uv' : null); });
+      child.on('error', () => { clearTimeout(timer); done(null); });
+    });
+  }
 
   async scanWorkspace(workspaceRoot: string): Promise<ScannedPackage[]> {
     this.logger.info(`Scanning workspace: ${workspaceRoot}`);
@@ -340,15 +373,16 @@ export class PackageScanner {
     return results;
   }
 
-  private getPipInstalledVersions(
+  private async getPipInstalledVersions(
     cwd: string
   ): Promise<Map<string, string>> {
-    return new Promise((resolve, reject) => {
-      const python = this.resolvePythonPath();
-      const args = ['-m', 'pip', 'list', '--format=json'];
+    const uvPath = await this.resolveUvPath(cwd);
+    const cmd = uvPath ?? this.resolvePythonPath();
+    const args = uvPath ? ['pip', 'list', '--format=json'] : ['-m', 'pip', 'list', '--format=json'];
 
-      this.logger.debug(`Running: ${python} ${args.join(' ')}`);
-      const child = cp.spawn(python, args, { cwd });
+    return new Promise((resolve, reject) => {
+      this.logger.debug(`Running: ${cmd} ${args.join(' ')}`);
+      const child = cp.spawn(cmd, args, { cwd });
 
       let stdout = '';
       let timedOut = false;
@@ -387,7 +421,7 @@ export class PackageScanner {
     });
   }
 
-  private getPipShowDetails(
+  private async getPipShowDetails(
     packageNames: string[],
     cwd: string
   ): Promise<Map<string, { requires: string[] }>> {
@@ -395,12 +429,15 @@ export class PackageScanner {
       return Promise.resolve(new Map());
     }
 
-    return new Promise((resolve, reject) => {
-      const python = this.resolvePythonPath();
-      const args = ['-m', 'pip', 'show', ...packageNames];
+    const uvPath = await this.resolveUvPath(cwd);
+    const cmd = uvPath ?? this.resolvePythonPath();
+    const args = uvPath
+      ? ['pip', 'show', ...packageNames]
+      : ['-m', 'pip', 'show', ...packageNames];
 
-      this.logger.debug(`Running: ${python} ${args.join(' ')}`);
-      const child = cp.spawn(python, args, { cwd });
+    return new Promise((resolve, reject) => {
+      this.logger.debug(`Running: ${cmd} ${args.join(' ')}`);
+      const child = cp.spawn(cmd, args, { cwd });
 
       let stdout = '';
       let stderr = '';
@@ -523,5 +560,69 @@ export class PackageScanner {
   normalizeName(name: string): string {
     // PEP 503 normalization
     return name.toLowerCase().replace(/[-_.]+/g, '-');
+  }
+
+  /**
+   * Run `pip check` (or `uv pip check`) and return a list of dependency conflicts.
+   * pip check exits with code 1 when conflicts exist — that is expected, not an error.
+   */
+  async checkConflicts(cwd: string): Promise<ConflictInfo[]> {
+    const uvPath = await this.resolveUvPath(cwd);
+    const cmd = uvPath ?? this.resolvePythonPath();
+    const args = uvPath ? ['pip', 'check'] : ['-m', 'pip', 'check'];
+
+    return new Promise(resolve => {
+      const child = cp.spawn(cmd, args, { cwd });
+      let stdout = '';
+      let stderr = '';
+      const timer = setTimeout(() => { child.kill(); resolve([]); }, 30_000);
+
+      child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      child.on('close', () => {
+        clearTimeout(timer);
+        resolve(this.parseConflicts(stdout + '\n' + stderr));
+      });
+      child.on('error', () => { clearTimeout(timer); resolve([]); });
+    });
+  }
+
+  private parseConflicts(output: string): ConflictInfo[] {
+    const conflicts: ConflictInfo[] = [];
+    for (const line of output.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) { continue; }
+
+      // pip: "numpy 1.24.4 has requirement contourpy>=1.0.1, but you have contourpy 0.8.0."
+      const m1 = trimmed.match(
+        /^(\S+)\s+(\S+)\s+has requirement\s+(.+?),\s+but you have\s+(\S+)\s+(\S+)\.?$/i
+      );
+      if (m1) {
+        conflicts.push({
+          package: this.normalizeName(m1[1]),
+          version: m1[2],
+          requirement: m1[3],
+          conflictingPackage: this.normalizeName(m1[4]),
+          conflictingVersion: m1[5],
+        });
+        continue;
+      }
+
+      // pip: "numpy 1.24.4 requires scipy, which is not installed."
+      const m2 = trimmed.match(
+        /^(\S+)\s+(\S+)\s+(?:requires|has requirement)\s+(\S+(?:\[.*?\])?),\s+which is not installed\.?$/i
+      );
+      if (m2) {
+        const depName = m2[3].replace(/[>=<!~^[\]].*/g, '');
+        conflicts.push({
+          package: this.normalizeName(m2[1]),
+          version: m2[2],
+          requirement: m2[3],
+          conflictingPackage: this.normalizeName(depName),
+          conflictingVersion: 'not installed',
+        });
+      }
+    }
+    return conflicts;
   }
 }

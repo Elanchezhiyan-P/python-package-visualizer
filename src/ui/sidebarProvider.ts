@@ -7,7 +7,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private messageHandlers: Array<(msg: WebviewMessage) => void> = [];
 
   constructor(
-    _context: vscode.ExtensionContext,
+    private readonly _context: vscode.ExtensionContext,
     private readonly logger: Logger
   ) {}
 
@@ -48,6 +48,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private getWelcomeHtml(): string {
     const nonce = getNonce();
+    const version: string = (this._context.extension.packageJSON as { version: string }).version;
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -356,7 +357,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   <div class="hero">
     <div class="hero-icon">📦</div>
     <div class="hero-name">Python Package Visualizer</div>
-    <span class="hero-badge">v1.0.1</span>
+    <span class="hero-badge">v${version}</span>
     <div class="hero-desc">Manage and visualize your Python workspace dependencies inside VS Code.</div>
   </div>
 
@@ -500,7 +501,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
-  <div class="footer">MIT License &nbsp;·&nbsp; Python Package Visualizer v1.0.1</div>
+  <div class="footer">MIT License &nbsp;·&nbsp; Python Package Visualizer v${version}</div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
