@@ -12,20 +12,21 @@ export class StatusBarManager {
     this.item.tooltip = 'Python Package Visualizer — click to open';
   }
 
-  update(outdated: number, vulnerable: number): void {
+  update(outdated: number, vulnerable: number, total = 0): void {
+    const totalStr = total > 0 ? ` · ${total} pkgs` : '';
     if (outdated === 0 && vulnerable === 0) {
-      this.item.text = '$(package) Packages ✓';
+      this.item.text = `$(package) Packages ✓${totalStr}`;
       this.item.backgroundColor = undefined;
-      this.item.tooltip = 'All Python packages are up to date';
+      this.item.tooltip = `All ${total} Python packages are up to date`;
     } else {
       const parts: string[] = [];
-      if (vulnerable > 0) parts.push(`$(shield) ${vulnerable} vulnerable`);
-      if (outdated > 0)   parts.push(`$(arrow-up) ${outdated} outdated`);
-      this.item.text = `$(package) ${parts.join('  ')}`;
+      if (vulnerable > 0) parts.push(`$(shield) ${vulnerable} CVE`);
+      if (outdated > 0)   parts.push(`$(arrow-up) ${outdated} updates`);
+      this.item.text = `$(package) ${parts.join('  ')}${totalStr}`;
       this.item.backgroundColor = vulnerable > 0
         ? new vscode.ThemeColor('statusBarItem.errorBackground')
         : new vscode.ThemeColor('statusBarItem.warningBackground');
-      this.item.tooltip = parts.join(', ') + ' — click to open Package Visualizer';
+      this.item.tooltip = parts.join(', ') + ` — ${total} packages total. Click to open.`;
     }
     this.item.show();
   }

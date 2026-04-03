@@ -186,6 +186,29 @@
       font-weight:  500;
     }
 
+    /* Safe Mode toolbar button */
+    #btn-safe-mode {
+      padding:      5px 10px;
+      background:   var(--vscode-dropdown-background);
+      color:        var(--vscode-dropdown-foreground);
+      border:       1px solid var(--vscode-dropdown-border, transparent);
+      border-radius: var(--radius);
+      font-size:    12px;
+      font-family:  inherit;
+      cursor:       pointer;
+      white-space:  nowrap;
+      transition:   border-color var(--ease), background var(--ease), color var(--ease);
+    }
+    #btn-safe-mode:hover {
+      border-color: var(--vscode-focusBorder);
+    }
+    #btn-safe-mode.active {
+      background:   rgba(74,222,128,.15);
+      color:        var(--c-ok);
+      border-color: color-mix(in srgb, var(--c-ok) 50%, transparent);
+      font-weight:  500;
+    }
+
     /* ── Stats Cards ─────────────────────────────────── */
     #stats-bar {
       display:    flex;
@@ -220,6 +243,7 @@
     .stat-card.unknown  { background: var(--c-unknown-bg); color: var(--c-unknown); }
     .stat-card.vuln     { background: var(--c-vuln-bg);    color: var(--c-vuln); }
     .stat-card.conflict { background: rgba(249,115,22,.13); color: #f97316; }
+    .stat-card.safe     { background: rgba(74,222,128,.13); color: var(--c-ok); }
 
     .stat-num {
       font-size:   14px;
@@ -341,6 +365,28 @@
     tbody tr.row-conflict          { border-left-color: #f97316; background: rgba(249,115,22,.03); }
     tbody tr.row-not-installed     { border-left-color: var(--c-missing); }
 
+    /* ── Health Score ring ───────────────────────────────── */
+    .health-ring { vertical-align: middle; }
+    .health-ring circle.track { fill: none; stroke: var(--vscode-panel-border); stroke-width: 2.5; }
+    .health-ring circle.fill  { fill: none; stroke-width: 2.5; stroke-linecap: round;
+                                  transition: stroke-dashoffset .5s ease, stroke .3s; }
+    .health-score-good   .fill { stroke: var(--c-ok); }
+    .health-score-warn   .fill { stroke: var(--c-update); }
+    .health-score-bad    .fill { stroke: var(--c-vuln); }
+    .health-score-text {
+      font-size: 6px; font-weight: 700; fill: currentColor;
+      dominant-baseline: central; text-anchor: middle;
+    }
+    td.col-health { width: 48px; text-align: center; }
+
+    /* ── Size heatmap row tint ───────────────────────────── */
+    tbody tr.size-md  td { background: color-mix(in srgb, rgba(251,146,60,.07) 100%, transparent); }
+    tbody tr.size-lg  td { background: color-mix(in srgb, rgba(251,146,60,.13) 100%, transparent); }
+    tbody tr.size-xl  td { background: color-mix(in srgb, rgba(251,146,60,.20) 100%, transparent); }
+    tbody tr.size-md:hover td,
+    tbody tr.size-lg:hover td,
+    tbody tr.size-xl:hover td { background: var(--vscode-list-hoverBackground); }
+
     /* ── Install/Update row progress bar ────────────────── */
     tbody tr { position: relative; overflow: hidden; }
     tbody tr[data-progress]::after {
@@ -436,9 +482,157 @@
       border-radius: 3px;
       white-space:  nowrap;
     }
-    .inline-tag.unused    { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .inline-tag.cve       { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
-    .inline-tag.conflict  { background: rgba(249,115,22,.15); color: #f97316; font-weight: 700; }
+    .inline-tag.unused      { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .inline-tag.cve         { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
+    .inline-tag.conflict    { background: rgba(249,115,22,.15); color: #f97316; font-weight: 700; }
+    .inline-tag.major-lock  { background: var(--c-unknown-bg); color: var(--c-unknown); }
+    .inline-tag.drift       { background: rgba(251,146,60,.15); color: var(--c-update); }
+
+    /* ── Popularity badge ────────────────────────────────── */
+    .pkg-popularity {
+      font-size:    10px;
+      color:        var(--vscode-descriptionForeground);
+      padding:      1px 5px;
+      border-radius: 3px;
+      background:   var(--c-unknown-bg);
+      white-space:  nowrap;
+    }
+
+    /* ── Alert banners (CVE / Drift) ─────────────────────── */
+    .alert-banner {
+      display:       none;
+      align-items:   center;
+      gap:           10px;
+      padding:       8px 14px;
+      border-radius: var(--radius);
+      font-size:     12px;
+      margin-bottom: 8px;
+      flex-wrap:     wrap;
+    }
+    .alert-banner.visible { display: flex; }
+    #vuln-banner {
+      background: var(--c-vuln-bg);
+      border:     1px solid color-mix(in srgb, var(--c-vuln) 30%, transparent);
+      color:      var(--c-vuln);
+    }
+    #drift-banner {
+      background: var(--c-update-bg);
+      border:     1px solid color-mix(in srgb, var(--c-update) 30%, transparent);
+      color:      var(--c-update);
+    }
+    .alert-banner-msg { flex: 1; }
+    .alert-banner-action {
+      padding:      3px 10px;
+      background:   rgba(255,255,255,.1);
+      border:       1px solid currentColor;
+      border-radius: var(--radius);
+      color:        inherit;
+      font-size:    11px;
+      cursor:       pointer;
+      white-space:  nowrap;
+    }
+    .alert-banner-action:hover { background: rgba(255,255,255,.18); }
+    .alert-banner-dismiss {
+      padding:    2px 6px;
+      background: none;
+      border:     none;
+      color:      inherit;
+      opacity:    .6;
+      cursor:     pointer;
+      font-size:  14px;
+      line-height: 1;
+    }
+    .alert-banner-dismiss:hover { opacity: 1; }
+
+    /* ── License Compliance Tab ──────────────────────────── */
+    #view-licenses {
+      flex: 1; overflow-y: auto; padding: 16px 18px;
+    }
+    .license-summary {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .license-group { margin-bottom: 20px; }
+    .license-group-header {
+      display:       flex;
+      align-items:   center;
+      gap:           8px;
+      font-size:     12px;
+      font-weight:   600;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .license-risk-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
+    }
+    .license-risk-safe       { background: var(--c-ok-bg);             color: var(--c-ok); }
+    .license-risk-caution    { background: var(--c-update-bg);          color: var(--c-update); }
+    .license-risk-restricted { background: var(--c-vuln-bg);            color: var(--c-vuln); }
+    .license-risk-unknown    { background: var(--c-unknown-bg);         color: var(--c-unknown); }
+    .license-pkg-list {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .license-pkg-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: var(--radius);
+      background: var(--vscode-editorWidget-background);
+      border: 1px solid var(--vscode-panel-border);
+      font-size: 11px; cursor: pointer;
+      transition: border-color var(--ease);
+    }
+    .license-pkg-chip:hover { border-color: var(--vscode-focusBorder); }
+    .license-pkg-chip .lpc-name { font-weight: 500; }
+    .license-pkg-chip .lpc-lic  { font-size: 10px; color: var(--vscode-descriptionForeground); }
+
+    /* ── Snapshots Tab ───────────────────────────────────── */
+    #view-snapshots {
+      flex: 1; overflow-y: auto; padding: 16px 18px;
+    }
+    #snapshots-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    #snapshots-header h3 { font-size: 13px; font-weight: 600; }
+    #btn-take-snapshot {
+      padding: 5px 14px;
+      background: var(--vscode-button-background);
+      color:      var(--vscode-button-foreground);
+      border:     none; border-radius: var(--radius);
+      font-size: 12px; font-family: inherit; cursor: pointer;
+    }
+    #btn-take-snapshot:hover { background: var(--vscode-button-hoverBackground); }
+    .snapshot-card {
+      display:       flex;
+      align-items:   center;
+      gap:           12px;
+      padding:       10px 14px;
+      background:    var(--vscode-editorWidget-background);
+      border:        1px solid var(--vscode-panel-border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      transition:    border-color var(--ease);
+    }
+    .snapshot-card:hover { border-color: var(--vscode-focusBorder); }
+    .snapshot-icon { font-size: 20px; }
+    .snapshot-info { flex: 1; }
+    .snapshot-name { font-size: 12px; font-weight: 600; }
+    .snapshot-meta { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+    .snapshot-actions { display: flex; gap: 6px; }
+    .snap-btn {
+      padding: 3px 10px; border-radius: var(--radius);
+      font-size: 11px; font-family: inherit; cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-dropdown-background);
+      color: var(--vscode-foreground); transition: border-color var(--ease);
+    }
+    .snap-btn:hover { border-color: var(--vscode-focusBorder); }
+    .snap-btn.danger { color: var(--c-vuln); border-color: color-mix(in srgb, var(--c-vuln) 30%, transparent); }
+    .snap-btn.danger:hover { background: var(--c-vuln-bg); }
+    #snapshots-empty {
+      text-align: center; padding: 40px;
+      color: var(--vscode-descriptionForeground); font-size: 12px;
+    }
 
     /* ── Action buttons ──────────────────────────────── */
     .act-group { display: flex; gap: 5px; align-items: center; }
@@ -1166,6 +1360,45 @@
       transition: opacity 0.2s;
     }
     #copy-toast.show { opacity: 1; }
+
+    /* ── Welcome Tour ───────────────────────────────── */
+    #tour-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
+      pointer-events: none;
+    }
+    #tour-backdrop.active { display: block; }
+    #tour-tooltip {
+      display: none; position: fixed; z-index: 1001;
+      width: 260px;
+      background: var(--vscode-editorWidget-background);
+      border: 1px solid var(--vscode-focusBorder);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+    }
+    #tour-tooltip.active { display: block; }
+    #tour-step-label {
+      font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+      color: var(--vscode-descriptionForeground); margin-bottom: 6px;
+    }
+    #tour-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    #tour-text  { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.5; margin-bottom: 14px; }
+    #tour-actions { display: flex; justify-content: space-between; gap: 8px; }
+    #tour-skip {
+      padding: 4px 10px; background: none; border: 1px solid var(--vscode-panel-border);
+      border-radius: var(--radius); color: var(--vscode-descriptionForeground);
+      font-size: 11px; cursor: pointer;
+    }
+    #tour-skip:hover { border-color: var(--vscode-foreground); }
+    #tour-next {
+      padding: 4px 14px; background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground); border: none;
+      border-radius: var(--radius); font-size: 11px; cursor: pointer;
+    }
+    #tour-next:hover { background: var(--vscode-button-hoverBackground); }
+
     /* ── Detail extras ──────────────────────────── */
     .detail-meta-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;
@@ -1292,7 +1525,7 @@
       <option value="lint">Lint</option>
       <option value="optional">Optional</option>
     </select>
-    <!-- sort-by dropdown removed — column headers handle sorting -->
+    <button id="btn-safe-mode" title="Safe Mode: block major-version updates">🛡 Safe Mode</button>
   </div>
 
   <!-- Stats Bar -->
@@ -1333,6 +1566,8 @@
     <div class="tab" data-tab="unused">Unused Packages</div>
     <div class="tab" data-tab="graph">Dependency Graph</div>
     <div class="tab" data-tab="history">History</div>
+    <div class="tab" data-tab="licenses">Licenses</div>
+    <div class="tab" data-tab="snapshots">Snapshots</div>
   </div>
 
   <!-- Content -->
@@ -1425,6 +1660,16 @@
 
     <!-- Package List -->
     <div id="view-list">
+      <div id="vuln-banner" class="alert-banner">
+        <span class="alert-banner-msg">&#x1F534; <strong id="vuln-banner-count">0</strong> package(s) have known security vulnerabilities</span>
+        <button class="alert-banner-action" id="vuln-banner-jump">View affected</button>
+        <button class="alert-banner-dismiss" id="vuln-banner-dismiss" title="Dismiss">&times;</button>
+      </div>
+      <div id="drift-banner" class="alert-banner">
+        <span class="alert-banner-msg">⚠️ <strong id="drift-banner-count">0</strong> package(s) installed version differs from requirements file</span>
+        <button class="alert-banner-action" id="drift-banner-view">View drift</button>
+        <button class="alert-banner-dismiss" id="drift-banner-dismiss" title="Dismiss">&times;</button>
+      </div>
       <div id="result-count"></div>
       <table>
         <thead>
@@ -1460,6 +1705,9 @@
                 <span class="sort-icon" id="si-released">&#x2B0D;</span>
               </span>
             </th>
+            <th class="col-health">
+              <span class="th-inner" style="cursor:default" title="Health score based on update status, vulnerabilities and release age">Health</span>
+            </th>
             <th>
               <span class="th-inner" style="cursor:default">Actions</span>
             </th>
@@ -1475,6 +1723,24 @@
         &#x1F553; No update history yet. Updates and rollbacks will appear here.
       </div>
       <div id="history-list"></div>
+    </div>
+
+    <!-- License Compliance View -->
+    <div id="view-licenses" style="display:none">
+      <div class="license-summary" id="license-summary"></div>
+      <div id="license-groups"></div>
+    </div>
+
+    <!-- Snapshots View -->
+    <div id="view-snapshots" style="display:none">
+      <div id="snapshots-header">
+        <h3>&#x1F4F8; Environment Snapshots</h3>
+        <button id="btn-take-snapshot">&#x2795; Take Snapshot</button>
+      </div>
+      <div id="snapshots-empty" style="display:none">
+        <p>No snapshots yet. Take a snapshot to save the current installed state of all packages.</p>
+      </div>
+      <div id="snapshots-list"></div>
     </div>
 
   </div><!-- /content -->
@@ -1510,6 +1776,18 @@
 
   <!-- Copy Toast -->
   <div id="copy-toast">✓ Copied to clipboard</div>
+
+  <!-- Welcome Tour -->
+  <div id="tour-backdrop"></div>
+  <div id="tour-tooltip">
+    <div id="tour-step-label"></div>
+    <div id="tour-title"></div>
+    <div id="tour-text"></div>
+    <div id="tour-actions">
+      <button id="tour-skip">Skip tour</button>
+      <button id="tour-next">Next →</button>
+    </div>
+  </div>
 
   <!-- Overlay -->
   <div id="overlay"></div>

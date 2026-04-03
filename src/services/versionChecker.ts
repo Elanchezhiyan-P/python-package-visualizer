@@ -24,6 +24,7 @@ export interface PyPIPackageInfo {
   releaseFiles?: Record<string, Array<{ yanked: boolean; upload_time?: string }>>;
   license?: string;
   pythonRequires?: string;
+  installSize?: number;
 }
 
 export interface VersionCheckResult {
@@ -39,6 +40,7 @@ export interface VersionCheckResult {
   license?: string;
   pythonRequires?: string;
   weeklyDownloads?: number;
+  installSize?: number;
 }
 
 interface PyPIAPIResponse {
@@ -51,7 +53,7 @@ interface PyPIAPIResponse {
     license?: string;
     requires_python?: string;
   };
-  releases: Record<string, Array<{ yanked: boolean; upload_time?: string }>>;
+  releases: Record<string, Array<{ yanked: boolean; upload_time?: string; size?: number }>>;
   vulnerabilities?: Array<{
     id: string;
     aliases: string[];
@@ -117,6 +119,7 @@ export class VersionChecker {
       releaseDate,
       license: info.license ?? '',
       pythonRequires: info.pythonRequires ?? '',
+      installSize: info.installSize,
     };
   }
 
@@ -249,6 +252,10 @@ export class VersionChecker {
       })
       .sort((a, b) => this.compareVersions(b, a));
 
+    // Sum sizes of wheel/sdist files for the latest release
+    const latestFiles = data.releases[data.info.version] ?? [];
+    const installSize = latestFiles.reduce((sum, f) => sum + (f.size ?? 0), 0) || undefined;
+
     return {
       name: data.info.name,
       latestVersion: data.info.version,
@@ -259,6 +266,7 @@ export class VersionChecker {
       releaseFiles: data.releases,
       license: data.info.license ?? '',
       pythonRequires: data.info.requires_python ?? '',
+      installSize,
     };
   }
 

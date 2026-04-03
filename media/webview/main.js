@@ -17,7 +17,12 @@
   let selectedPackages = new Set(); // Set of package names
   let filterVuln     = false; // extra stat-card filter: only vulnerable
   let filterConflict = false; // extra stat-card filter: only conflicted
+  let filterDrift    = false; // extra filter: only drifted packages
   let activeStatFilter = null; // tracks which stat card is selected
+  let safeMode = false;          // block major-version updates when true
+  let vulnBannerDismissed  = false;
+  let driftBannerDismissed = false;
+  let snapshots = [];            // list of saved snapshots from extension
 
   // Pending PyPI search result (for Add Package modal)
   let pendingInstallName = '';
@@ -70,6 +75,11 @@
   const elBulkDeselect = document.getElementById('bulk-deselect');
   const elCheckAll   = document.getElementById('check-all');
   const elCopyToast  = document.getElementById('copy-toast');
+  const elBtnSafeMode   = document.getElementById('btn-safe-mode');
+  const elVulnBanner    = document.getElementById('vuln-banner');
+  const elDriftBanner   = document.getElementById('drift-banner');
+  const elViewLicenses  = document.getElementById('view-licenses');
+  const elViewSnapshots = document.getElementById('view-snapshots');
 
   // ── Message listener (extension → webview) ───────────────────────────────
   window.addEventListener('message', event => {
@@ -82,7 +92,10 @@
         if (msg.scanStats) {
           window._scanStats = msg.scanStats;
         }
+        vulnBannerDismissed  = false;
+        driftBannerDismissed = false;
         renderAll();
+        if (msg.type === 'init') { setTimeout(startTour, 1000); }
         break;
       case 'progress':
         showLoading(msg.message || 'Loading...');
@@ -111,6 +124,10 @@
         break;
       case 'pkgProgress':
         updateRowProgress(msg.name, msg.stage, msg.percent);
+        break;
+      case 'snapshots':
+        snapshots = msg.snapshots || [];
+        if (activeTab === 'snapshots') renderSnapshots();
         break;
     }
   });
@@ -146,6 +163,17 @@
     showLoading('Refreshing...');
   });
 
+  if (elBtnSafeMode) {
+    elBtnSafeMode.addEventListener('click', () => {
+      safeMode = !safeMode;
+      elBtnSafeMode.classList.toggle('active', safeMode);
+      elBtnSafeMode.title = safeMode
+        ? 'Safe Mode ON — major-version updates blocked'
+        : 'Safe Mode: block major-version updates';
+      if (activeTab === 'list') renderTable(getFiltered());
+    });
+  }
+
   const closeDetail = () => {
     elDetail.style.display = 'none';
     elOverlay.style.display = 'none';
@@ -165,8 +193,8 @@
   elSearch.addEventListener('input', () => renderAll());
   elFilter.addEventListener('change', () => {
     // Deactivate stat-card filter if user manually picks a status
-    if (filterVuln || filterConflict) {
-      filterVuln = false; filterConflict = false; activeStatFilter = null;
+    if (filterVuln || filterConflict || filterDrift) {
+      filterVuln = false; filterConflict = false; filterDrift = false; activeStatFilter = null;
       document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
     }
     updateFilterIndicators();
@@ -292,6 +320,70 @@
     elCopyToast.classList.add('show');
     setTimeout(() => elCopyToast.classList.remove('show'), 3000);
   }
+
+  // ── Welcome Tour ──────────────────────────────────────────────────────────
+  const TOUR_STEPS = [
+    { target: '#stats-bar',           title: 'Package Stats',      text: 'Click any card to instantly filter the list by status — updates, vulnerabilities, or conflicts.' },
+    { target: '#btn-add-pkg',         title: 'Add Package',        text: 'Search PyPI and install a new package into your environment in one click.' },
+    { target: '[data-tab="graph"]',   title: 'Dependency Graph',   text: 'Visualize your full dependency tree. Click any node to expand or view package details.' },
+    { target: '[data-tab="licenses"]',title: 'License Compliance', text: 'See all licenses grouped by risk level — flagging GPL/AGPL packages for commercial projects.' },
+  ];
+  let tourStep = 0;
+
+  function startTour() {
+    if (localStorage.getItem('tourShown')) return;
+    tourStep = 0;
+    showTourStep();
+  }
+
+  function showTourStep() {
+    const backdrop = document.getElementById('tour-backdrop');
+    const tooltip  = document.getElementById('tour-tooltip');
+    if (!backdrop || !tooltip) return;
+
+    if (tourStep >= TOUR_STEPS.length) {
+      endTour();
+      return;
+    }
+
+    const step = TOUR_STEPS[tourStep];
+    const target = document.querySelector(step.target);
+
+    document.getElementById('tour-step-label').textContent = `Step ${tourStep + 1} of ${TOUR_STEPS.length}`;
+    document.getElementById('tour-title').textContent = step.title;
+    document.getElementById('tour-text').textContent  = step.text;
+    document.getElementById('tour-next').textContent  = tourStep === TOUR_STEPS.length - 1 ? '✓ Done' : 'Next →';
+
+    backdrop.classList.add('active');
+    tooltip.classList.add('active');
+
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const ttW = 260, ttH = 160;
+      let top  = rect.bottom + 10;
+      let left = rect.left;
+      if (left + ttW > window.innerWidth - 10)  left = window.innerWidth - ttW - 10;
+      if (top  + ttH > window.innerHeight - 10) top  = rect.top - ttH - 10;
+      tooltip.style.top  = `${Math.max(8, top)}px`;
+      tooltip.style.left = `${Math.max(8, left)}px`;
+    } else {
+      tooltip.style.top  = '50%';
+      tooltip.style.left = '50%';
+      tooltip.style.transform = 'translate(-50%,-50%)';
+    }
+  }
+
+  function endTour() {
+    document.getElementById('tour-backdrop')?.classList.remove('active');
+    document.getElementById('tour-tooltip')?.classList.remove('active');
+    localStorage.setItem('tourShown', '1');
+  }
+
+  document.getElementById('tour-next')?.addEventListener('click', () => {
+    tourStep++;
+    showTourStep();
+  });
+  document.getElementById('tour-skip')?.addEventListener('click', endTour);
 
   // ── Bulk bar ──────────────────────────────────────────────────────────────
   function updateBulkBar() {
@@ -509,6 +601,123 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   }
 
+  // ── Utility functions ─────────────────────────────────────────────────────
+  function formatDownloads(n) {
+    if (!n || n <= 0) return '';
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+    return String(n);
+  }
+
+  function isMajorJump(installed, latest) {
+    if (!installed || !latest) return false;
+    const maj = v => parseInt((v || '0').replace(/[^\d.].*/, '').split('.')[0], 10) || 0;
+    return maj(latest) > maj(installed);
+  }
+
+  function computeDrift(packages) {
+    return packages.filter(pkg => {
+      if (!pkg.specifiedVersion || !pkg.installedVersion) return false;
+      const m = pkg.specifiedVersion.match(/[=!<>~^]+\s*([\d][^\s,;]*)/);
+      if (!m) return false;
+      const pinned = m[1];
+      return pinned !== pkg.installedVersion;
+    });
+  }
+
+  function healthScore(pkg) {
+    let s = 100;
+    if (pkg.vulnerabilities && pkg.vulnerabilities.length > 0) s -= 30;
+    if (pkg.status === 'update-available') s -= 20;
+    if (pkg.status === 'unknown' || pkg.status === 'not-installed') s -= 10;
+    if (pkg.releaseDate) {
+      const days = (Date.now() - new Date(pkg.releaseDate + 'T00:00:00').getTime()) / 86400000;
+      if (days > 730) s -= 20;
+      else if (days > 365) s -= 10;
+    }
+    return Math.max(0, Math.min(100, s));
+  }
+
+  function healthRingHtml(pkg) {
+    const score = healthScore(pkg);
+    const r = 9, circ = 2 * Math.PI * r;
+    const offset = circ * (1 - score / 100);
+    const cls = score >= 80 ? 'health-score-good' : score >= 50 ? 'health-score-warn' : 'health-score-bad';
+    return `<svg class="health-ring ${cls}" width="24" height="24" viewBox="0 0 24 24" title="Health: ${score}/100">
+      <circle class="track" cx="12" cy="12" r="${r}"/>
+      <circle class="fill" cx="12" cy="12" r="${r}"
+        stroke-dasharray="${circ.toFixed(2)}"
+        stroke-dashoffset="${offset.toFixed(2)}"
+        transform="rotate(-90 12 12)"/>
+      <text class="health-score-text" x="12" y="12">${score}</text>
+    </svg>`;
+  }
+
+  function sizeTintClass(bytes) {
+    if (!bytes || bytes <= 0) return '';
+    const mb = bytes / (1024 * 1024);
+    if (mb > 50)  return 'size-xl';
+    if (mb > 10)  return 'size-lg';
+    if (mb > 1)   return 'size-md';
+    return '';
+  }
+
+  function getLicenseRisk(license) {
+    if (!license) return 'unknown';
+    const l = license.toUpperCase();
+    if (/\bAGPL\b/.test(l) || /\bGPL[-\s]?[23]/.test(l)) return 'restricted';
+    if (/\bLGPL\b/.test(l) || /\bMPL\b/.test(l) || /\bEUPL\b/.test(l)) return 'caution';
+    if (/\bMIT\b|\bBSD\b|\bAPACHE\b|\bISC\b|\bUNLICENSE\b|\bPSF\b|\bWTFPL\b/.test(l)) return 'safe';
+    return 'unknown';
+  }
+
+  // ── Banner helpers ────────────────────────────────────────────────────────
+  function updateVulnBanner(packages) {
+    if (!elVulnBanner) return;
+    const count = packages.filter(p => p.vulnerabilities && p.vulnerabilities.length > 0).length;
+    if (count > 0 && !vulnBannerDismissed) {
+      const el = document.getElementById('vuln-banner-count');
+      if (el) el.textContent = count;
+      elVulnBanner.classList.add('visible');
+    } else {
+      elVulnBanner.classList.remove('visible');
+    }
+  }
+
+  function updateDriftBanner(packages) {
+    if (!elDriftBanner) return;
+    const drifted = computeDrift(packages);
+    if (drifted.length > 0 && !driftBannerDismissed) {
+      const el = document.getElementById('drift-banner-count');
+      if (el) el.textContent = drifted.length;
+      elDriftBanner.classList.add('visible');
+    } else {
+      elDriftBanner.classList.remove('visible');
+    }
+  }
+
+  // Banner button wiring
+  document.getElementById('vuln-banner-jump')?.addEventListener('click', () => {
+    filterVuln = true; filterConflict = false; filterDrift = false; activeStatFilter = 'vuln';
+    document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
+    document.getElementById('stat-vuln-card')?.classList.add('selected');
+    renderAll();
+  });
+  document.getElementById('vuln-banner-dismiss')?.addEventListener('click', () => {
+    vulnBannerDismissed = true;
+    elVulnBanner?.classList.remove('visible');
+  });
+  document.getElementById('drift-banner-view')?.addEventListener('click', () => {
+    filterDrift = true; filterVuln = false; filterConflict = false;
+    activeStatFilter = null;
+    document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
+    renderAll();
+  });
+  document.getElementById('drift-banner-dismiss')?.addEventListener('click', () => {
+    driftBannerDismissed = true;
+    elDriftBanner?.classList.remove('visible');
+  });
+
   // ── Render orchestrator ───────────────────────────────────────────────────
   function renderAll() {
     const filtered = getFiltered();
@@ -546,7 +755,8 @@
       const matchVuln   = !filterVuln || (pkg.vulnerabilities && pkg.vulnerabilities.length > 0);
       const normPkg     = pkg.name.toLowerCase().replace(/[-_.]+/g, '-');
       const matchConflict = !filterConflict || conflictsByPkg.has(normPkg);
-      return matchSearch && matchStatus && matchGroup && matchVuln && matchConflict;
+      const matchDrift    = !filterDrift    || computeDrift([pkg]).length > 0;
+      return matchSearch && matchStatus && matchGroup && matchVuln && matchConflict && matchDrift;
     });
 
     filtered.sort((a, b) => {
@@ -579,12 +789,106 @@
     return filtered;
   }
 
+  // ── License Compliance ────────────────────────────────────────────────────
+  function renderLicenses() {
+    const summaryEl = document.getElementById('license-summary');
+    const groupsEl  = document.getElementById('license-groups');
+    if (!summaryEl || !groupsEl) return;
+
+    const RISKS = ['restricted', 'caution', 'safe', 'unknown'];
+    const RISK_LABELS = { restricted: '🔴 Restricted (GPL/AGPL)', caution: '⚠️ Caution (LGPL/MPL)', safe: '✅ Permissive', unknown: '❓ Unknown' };
+    const grouped = { restricted: [], caution: [], safe: [], unknown: [] };
+
+    allPackages.forEach(pkg => {
+      const risk = getLicenseRisk(pkg.license);
+      grouped[risk].push(pkg);
+    });
+
+    // Summary cards
+    summaryEl.innerHTML = RISKS.map(r => {
+      const count = grouped[r].length;
+      if (!count) return '';
+      return `<span class="stat-card ${r === 'safe' ? 'ok' : r === 'caution' ? 'update' : r === 'restricted' ? 'vuln' : 'unknown'}">`
+        + `<span class="stat-num">${count}</span><span>${RISK_LABELS[r]}</span></span>`;
+    }).join('');
+
+    // Grouped lists
+    groupsEl.innerHTML = RISKS.map(r => {
+      const pkgs = grouped[r];
+      if (!pkgs.length) return '';
+      return `<div class="license-group">
+        <div class="license-group-header">
+          <span class="license-risk-badge license-risk-${r}">${RISK_LABELS[r]}</span>
+          <span style="color:var(--vscode-descriptionForeground);font-weight:400">${pkgs.length} package${pkgs.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="license-pkg-list">
+          ${pkgs.map(p => `<span class="license-pkg-chip" data-name="${esc(p.name)}">
+            <span class="lpc-name">${esc(p.name)}</span>
+            <span class="lpc-lic">${esc(p.license || 'Unknown')}</span>
+          </span>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    // Click chip → open detail panel
+    groupsEl.querySelectorAll('.license-pkg-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const pkg = allPackages.find(p => p.name === chip.dataset.name);
+        if (pkg) showDetail(pkg);
+      });
+    });
+  }
+
+  // ── Snapshots ─────────────────────────────────────────────────────────────
+  function renderSnapshots() {
+    const listEl  = document.getElementById('snapshots-list');
+    const emptyEl = document.getElementById('snapshots-empty');
+    if (!listEl) return;
+
+    if (!snapshots.length) {
+      if (emptyEl) emptyEl.style.display = '';
+      listEl.innerHTML = '';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    listEl.innerHTML = snapshots.map(s => {
+      const pkgCount = Object.keys(s.packages || {}).length;
+      const date = new Date(s.createdAt).toLocaleString();
+      return `<div class="snapshot-card">
+        <span class="snapshot-icon">&#x1F4F8;</span>
+        <div class="snapshot-info">
+          <div class="snapshot-name">${esc(s.name)}</div>
+          <div class="snapshot-meta">${pkgCount} packages &nbsp;·&nbsp; ${esc(date)}</div>
+        </div>
+        <div class="snapshot-actions">
+          <button class="snap-btn snap-restore" data-id="${esc(s.id)}" title="Restore to this snapshot">&#x21A9; Restore</button>
+          <button class="snap-btn danger snap-delete" data-id="${esc(s.id)}" title="Delete snapshot">&#x1F5D1;</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.snap-restore').forEach(btn => {
+      btn.addEventListener('click', () => vscode.postMessage({ type: 'restoreSnapshot', id: btn.dataset.id }));
+    });
+    listEl.querySelectorAll('.snap-delete').forEach(btn => {
+      btn.addEventListener('click', () => vscode.postMessage({ type: 'deleteSnapshot', id: btn.dataset.id }));
+    });
+  }
+
+  document.getElementById('btn-take-snapshot')?.addEventListener('click', () => {
+    const name = `Snapshot ${new Date().toLocaleString()}`;
+    vscode.postMessage({ type: 'takeSnapshot', name });
+  });
+
   function showTab(tab, filtered) {
     filtered = filtered || getFiltered();
     elGraph.style.display   = 'none';
     elList.style.display    = 'none';
     elUnused.style.display  = 'none';
-    if (elHistory) elHistory.style.display = 'none';
+    if (elHistory)       elHistory.style.display       = 'none';
+    if (elViewLicenses)  elViewLicenses.style.display  = 'none';
+    if (elViewSnapshots) elViewSnapshots.style.display = 'none';
 
     if (tab === 'graph') {
       elGraph.style.display = 'block';
@@ -596,6 +900,13 @@
     } else if (tab === 'history') {
       if (elHistory) elHistory.style.display = 'flex';
       renderHistory();
+    } else if (tab === 'licenses') {
+      if (elViewLicenses) { elViewLicenses.style.display = 'flex'; elViewLicenses.style.flexDirection = 'column'; }
+      renderLicenses();
+    } else if (tab === 'snapshots') {
+      if (elViewSnapshots) { elViewSnapshots.style.display = 'flex'; elViewSnapshots.style.flexDirection = 'column'; }
+      vscode.postMessage({ type: 'listSnapshots' });
+      renderSnapshots();
     } else {
       elList.style.display = 'block';
       renderTable(filtered);
@@ -632,6 +943,9 @@
 
     if (elStatVuln) elStatVuln.textContent = vulnPkgs;
     if (elStatVulnCard) elStatVulnCard.style.display = vulnPkgs > 0 ? '' : 'none';
+
+    updateVulnBanner(packages);
+    updateDriftBanner(packages);
 
     // Group breakdown
     const groupCounts = {};
@@ -908,7 +1222,7 @@
           elSearch.value = '';
           elFilter.value = 'all';
           if (elFilterGroup) elFilterGroup.value = 'all';
-          filterVuln = false; filterConflict = false; activeStatFilter = null;
+          filterVuln = false; filterConflict = false; filterDrift = false; activeStatFilter = null;
           document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
           updateFilterIndicators();
           renderAll();
@@ -942,6 +1256,9 @@
       tr.classList.add(`row-${pkg.status || 'unknown'}`);
       if (hasVuln)     tr.classList.add('row-vulnerable');
       if (hasConflict) tr.classList.add('row-conflict');
+      const sizeClass = sizeTintClass(pkg.installSize);
+      if (sizeClass)   tr.classList.add(sizeClass);
+      if (pkg.installSize) tr.title = `Install size: ${(pkg.installSize / 1024 / 1024).toFixed(1)} MB`;
       tr.style.animationDelay = `${i * 18}ms`;
 
       const latestDisplay = hasUpdate
@@ -965,15 +1282,20 @@
             ${hasVuln     ? `<span class="inline-tag cve" title="${pkg.vulnerabilities.length} vulnerabilit${pkg.vulnerabilities.length !== 1 ? 'ies' : 'y'}">&#x1F534; CVE</span>` : ''}
             ${hasConflict ? `<span class="inline-tag conflict" title="${conflictsByPkg.get(normPkgName).length} dependency conflict(s)">&#x26A1; conflict</span>` : ''}
             ${!pkg.isUsed ? `<span class="inline-tag unused" title="No import found in project">&#x2298; unused?</span>` : ''}
+            ${computeDrift([pkg]).length > 0 ? `<span class="inline-tag drift" title="Installed version differs from requirements file">&#x21C4; drift</span>` : ''}
+            ${pkg.weeklyDownloads > 0 ? `<span class="pkg-popularity" title="${(pkg.weeklyDownloads||0).toLocaleString()} downloads/week">&#x2193;${formatDownloads(pkg.weeklyDownloads)}/wk</span>` : ''}
           </div>
         </td>
         <td><span class="ver" data-copy="${esc(pkg.installedVersion || '')}" title="Click to copy" style="cursor:pointer">${esc(pkg.installedVersion || '—')}<span class="copy-hint">⧉</span></span></td>
         <td>${latestDisplay}</td>
         <td>${statusBadge(pkg.status)}</td>
         <td><span style="font-size:11px;color:var(--vscode-descriptionForeground)">${esc(releaseDateDisplay)}</span></td>
+        <td class="col-health">${healthRingHtml(pkg)}</td>
         <td>
           <div class="act-group">
-            ${hasUpdate    ? `<button class="action-btn success btn-update"  data-name="${esc(pkg.name)}" title="Update to ${esc(pkg.latestVersion)}">&#x2B06; Update</button>` : ''}
+            ${hasUpdate && safeMode && isMajorJump(pkg.installedVersion, pkg.latestVersion)
+                ? `<span class="inline-tag major-lock" title="Major version jump — disabled in Safe Mode">&#x1F512; Major</span>`
+                : hasUpdate ? `<button class="action-btn success btn-update" data-name="${esc(pkg.name)}" title="Update to ${esc(pkg.latestVersion)}">&#x2B06; Update</button>` : ''}
             ${notInstalled ? `<button class="action-btn primary btn-install" data-name="${esc(pkg.name)}" title="Install ${esc(pkg.name)}">&#x2B07; Install</button>` : ''}
             ${hasHistory && !notInstalled ? `<button class="action-btn secondary btn-rollback" data-name="${esc(pkg.name)}" title="Rollback">&#x21A9; Rollback</button>` : ''}
             ${!pkg.isUsed && pkg.source ? `<button class="action-btn danger btn-remove-req" data-name="${esc(pkg.name)}" data-source="${esc(pkg.source)}" title="Remove from ${esc(pkg.source)}">&#x1F5D1; Remove</button>` : ''}

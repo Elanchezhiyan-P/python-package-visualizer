@@ -25,7 +25,11 @@ export type WebviewMessage =
   | { type: 'pinVersion'; name: string; version: string; source: string }
   | { type: 'createRequirements' }
   | { type: 'bulkUpdate'; names: string[] }
-  | { type: 'bulkRemove'; names: string[]; sources: string[] };
+  | { type: 'bulkRemove'; names: string[]; sources: string[] }
+  | { type: 'takeSnapshot'; name: string }
+  | { type: 'restoreSnapshot'; id: string }
+  | { type: 'deleteSnapshot'; id: string }
+  | { type: 'listSnapshots' };
 
 export interface ScanStats {
   filesScanned: number;
@@ -51,6 +55,7 @@ export interface PackageDisplayData {
   license?: string;
   pythonRequires?: string;
   weeklyDownloads?: number;
+  installSize?: number;
 }
 
 export class WebviewPanel {
