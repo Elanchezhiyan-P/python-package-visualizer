@@ -247,25 +247,29 @@ Then press `F5` in VS Code (with the project folder open) to launch the **Extens
 ```
 python-package-visualizer/
 ├── src/
-│   ├── extension.ts              # Entry point
+│   ├── extension.ts                   # Entry point
 │   ├── commands/
-│   │   └── commandController.ts  # All command & message handlers
+│   │   └── commandController.ts       # All command & message handlers
 │   ├── modules/
-│   │   ├── packageScanner.ts     # Scans requirements files
-│   │   ├── importScanner.ts      # Static import analysis
-│   │   └── requirementsSync.ts   # Syncs version pins to file
+│   │   ├── packageScanner.ts          # Scans dep files (requirements, pyproject, setup.*, Pipfile)
+│   │   ├── importScanner.ts           # Static import analysis for unused packages
+│   │   └── requirementsSync.ts        # Syncs version pins back to dep files
 │   ├── services/
-│   │   ├── versionChecker.ts     # PyPI API calls
-│   │   └── versionHistoryCache.ts
+│   │   ├── versionChecker.ts          # PyPI API — versions, CVEs, size, license
+│   │   ├── snapshotManager.ts         # Save / restore environment snapshots
+│   │   └── versionHistoryCache.ts     # Per-workspace install history
 │   ├── ui/
-│   │   ├── webviewPanel.ts       # Main editor tab
-│   │   ├── sidebarProvider.ts    # Activity Bar sidebar
-│   │   └── statusBarManager.ts   # Status bar badge
-│   └── webview/
-│       ├── index.html            # Webview UI
-│       └── main.js               # Webview JS
+│   │   ├── webviewPanel.ts            # Main editor tab (webview host)
+│   │   ├── sidebarProvider.ts         # Activity Bar sidebar with live stats
+│   │   └── statusBarManager.ts        # Status bar badge
+│   └── utils/
+│       └── logger.ts                  # Scoped logger
 ├── media/
-│   └── icon.svg
+│   ├── icon.svg
+│   ├── icon.png
+│   └── webview/
+│       ├── index.html                 # Webview UI + CSS
+│       └── main.js                    # Webview JS (all tab logic)
 └── package.json
 ```
 
