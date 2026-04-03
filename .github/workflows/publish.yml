@@ -38,7 +38,7 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
         # ✅ Publish to OpenVSX
-      #- name: Publish to OpenVSX
-      #  run: ovsx publish *.vsix -p $OVSX_PAT
-      #  env:
-      #    OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - name: Publish to OpenVSX
+        run: ovsx publish *.vsix -p $OVSX_PAT
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
