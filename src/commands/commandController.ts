@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
 import { Logger } from '../utils/logger.js';
 import { PackageScanner } from '../modules/packageScanner.js';
 import { ImportScanner } from '../modules/importScanner.js';
@@ -228,6 +229,16 @@ export class CommandController {
 
       this.panel.sendPackages(scanned, checkResults, unusedPackages, scanStats);
 
+      // Run conflict detection in the background and push results when ready
+      this.scanner.checkConflicts(root).then(conflicts => {
+        if (conflicts.length > 0) {
+          this.logger.info(`Found ${conflicts.length} dependency conflict(s)`);
+        }
+        this.panel.sendConflicts(conflicts);
+      }).catch(err => {
+        this.logger.warn(`Conflict check failed: ${String(err)}`);
+      });
+
       // Send history to panel
       const historyEntries = this.buildHistoryEntries(root);
       this.panel.sendHistory(historyEntries);
@@ -258,7 +269,6 @@ export class CommandController {
     const root = this.getWorkspaceRoot();
     if (!root || !names.length) { return; }
 
-    const python = this.scanner.resolvePythonPath();
     let succeeded = 0;
     let failed = 0;
 
@@ -276,10 +286,8 @@ export class CommandController {
             increment: 100 / names.length,
           });
           try {
-            await this.runPip(
-              `"${python}" -m pip install "${name}" --upgrade`,
-              root
-            );
+            const cmd = await this.buildInstallCmd(`"${name}" --upgrade`, root);
+            await this.runPip(cmd, root);
             succeeded++;
           } catch (err) {
             failed++;
@@ -377,13 +385,12 @@ export class CommandController {
       return;
     }
 
-    const python = this.scanner.resolvePythonPath();
-    const cmd = `"${python}" -m pip install "${packageName}" --upgrade`;
+    const { exe, args } = await this.buildInstallSpawnArgs([packageName, '--upgrade'], root);
 
-    this.logger.info(`Updating: ${cmd}`);
+    this.logger.info(`Updating: ${exe} ${args.join(' ')}`);
 
     try {
-      await this.runPip(cmd, root);
+      await this.runInstallTracked(exe, args, root, packageName);
 
       // Record in history
       const scanned = await this.scanner.scanWorkspace(root);
@@ -427,13 +434,12 @@ export class CommandController {
       version = prev;
     }
 
-    const python = this.scanner.resolvePythonPath();
-    const cmd = `"${python}" -m pip install "${packageName}==${version}"`;
+    const { exe, args } = await this.buildInstallSpawnArgs([`${packageName}==${version}`], root);
 
-    this.logger.info(`Rolling back: ${cmd}`);
+    this.logger.info(`Rolling back: ${exe} ${args.join(' ')}`);
 
     try {
-      await this.runPip(cmd, root);
+      await this.runInstallTracked(exe, args, root, packageName);
       this.history.recordVersion(root, packageName, version, 'pip-rollback');
 
       // Sync requirements file with new version
@@ -516,12 +522,32 @@ export class CommandController {
   async installNewPackage(packageName: string, version?: string): Promise<void> {
     const root = this.getWorkspaceRoot();
     if (!root || !packageName.trim()) { return; }
-    const python = this.scanner.resolvePythonPath();
-    const spec = version ? `"${packageName}==${version}"` : `"${packageName}"`;
-    const cmd = `"${python}" -m pip install ${spec}`;
-    this.logger.info(`Installing new package: ${cmd}`);
+    const pkgSpec = version ? `${packageName}==${version}` : packageName;
+    const { exe, args } = await this.buildInstallSpawnArgs([pkgSpec], root);
+    this.logger.info(`Installing new package: ${exe} ${args.join(' ')}`);
     try {
-      await this.runPip(cmd, root);
+      await this.runInstallTracked(exe, args, root, packageName);
+
+      // Append to requirements.txt if it exists and the package is not already listed
+      const reqFile = vscode.Uri.file(path.join(root, 'requirements.txt'));
+      try {
+        const bytes = await vscode.workspace.fs.readFile(reqFile);
+        const content = Buffer.from(bytes).toString('utf-8');
+        const normPkg = packageName.toLowerCase().replace(/[-_.]+/g, '-');
+        const alreadyListed = content.split('\n').some(line => {
+          const clean = line.split('#')[0].trim().toLowerCase().replace(/[-_.]+/g, '-');
+          return clean.startsWith(normPkg);
+        });
+        if (!alreadyListed) {
+          const entry = version ? `${packageName}==${version}` : packageName;
+          const newContent = content.endsWith('\n') ? content + entry + '\n' : content + '\n' + entry + '\n';
+          await vscode.workspace.fs.writeFile(reqFile, Buffer.from(newContent, 'utf-8'));
+          this.logger.info(`Appended ${entry} to requirements.txt`);
+        }
+      } catch {
+        // requirements.txt does not exist — skip silently
+      }
+
       void vscode.window.showInformationMessage(`Python Packages: ${packageName} installed ✅`);
       await this.refreshVisualizer();
     } catch (err) {
@@ -764,6 +790,85 @@ export class CommandController {
     const outdated = checkResults.filter(r => r.status === 'update-available').length;
     const vulnerable = checkResults.filter(r => r.vulnerabilities && r.vulnerabilities.length > 0).length;
     this.statusBar.update(outdated, vulnerable);
+  }
+
+  /** Returns the install command for either uv or pip, depending on availability. */
+  private async buildInstallCmd(packageSpec: string, root: string): Promise<string> {
+    const uvPath = await this.scanner.resolveUvPath(root);
+    if (uvPath) {
+      return `uv pip install ${packageSpec}`;
+    }
+    const python = this.scanner.resolvePythonPath();
+    return `"${python}" -m pip install ${packageSpec}`;
+  }
+
+  /** Returns spawn-ready exe + args for installing the given package args. */
+  private async buildInstallSpawnArgs(packageArgs: string[], root: string): Promise<{ exe: string; args: string[] }> {
+    const uvPath = await this.scanner.resolveUvPath(root);
+    if (uvPath) {
+      return { exe: uvPath, args: ['pip', 'install', ...packageArgs] };
+    }
+    const python = this.scanner.resolvePythonPath();
+    return { exe: python, args: ['-m', 'pip', 'install', ...packageArgs] };
+  }
+
+  /** Spawns an install process and streams progress messages to the webview. */
+  private runInstallTracked(exe: string, args: string[], cwd: string, packageName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = cp.spawn(exe, args, { cwd, shell: false });
+
+      const sendProgress = (stage: string, percent: number) => {
+        void this.panel.webview?.postMessage({ type: 'pkgProgress', name: packageName, stage, percent });
+      };
+
+      sendProgress('Starting…', 5);
+
+      let stderr = '';
+      let stdoutBuf = '';
+
+      const processLine = (line: string) => {
+        if (!line.trim()) { return; }
+        this.logger.info(line);
+        const l = line.toLowerCase();
+        if (l.includes('collecting') || l.includes('resolved')) {
+          sendProgress('Collecting…', 15);
+        } else if (l.includes('downloading') || l.includes('prepared')) {
+          const match = line.match(/(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\s*mb/i);
+          if (match) {
+            const pct = Math.round((parseFloat(match[1]) / parseFloat(match[2])) * 50) + 20;
+            sendProgress('Downloading…', Math.min(pct, 70));
+          } else {
+            sendProgress('Downloading…', 40);
+          }
+        } else if (l.includes('installing collected') || l.includes('installed') || l.includes('updated')) {
+          sendProgress('Installing…', 85);
+        } else if (l.includes('successfully installed') || l.includes('requirement already satisfied') || l.includes('audited')) {
+          sendProgress('Done', 100);
+        }
+      };
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBuf += chunk.toString();
+        const lines = stdoutBuf.split('\n');
+        stdoutBuf = lines.pop() ?? '';
+        lines.forEach(processLine);
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString();
+        stderr += text;
+        this.logger.warn(text.trim());
+      });
+      child.on('close', (code) => {
+        if (stdoutBuf) { processLine(stdoutBuf); }
+        if (code === 0) {
+          sendProgress('Done', 100);
+          resolve();
+        } else {
+          reject(new Error(stderr || `Process exited with code ${String(code)}`));
+        }
+      });
+      child.on('error', reject);
+    });
   }
 
   private runPip(cmd: string, cwd: string): Promise<void> {

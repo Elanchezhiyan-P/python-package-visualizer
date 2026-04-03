@@ -9,10 +9,15 @@
   // ── State ───────────────────────────────────────────────────────────────
   let allPackages = [];
   let historyEntries = [];
+  let allConflicts = [];
+  let conflictsByPkg = new Map(); // normalized pkg name → ConflictInfo[]
   let activeTab = 'list';
   let sortCol = 'status';   // active sort column key
   let sortDir = 'asc';      // 'asc' | 'desc'
   let selectedPackages = new Set(); // Set of package names
+  let filterVuln     = false; // extra stat-card filter: only vulnerable
+  let filterConflict = false; // extra stat-card filter: only conflicted
+  let activeStatFilter = null; // tracks which stat card is selected
 
   // Pending PyPI search result (for Add Package modal)
   let pendingInstallName = '';
@@ -40,7 +45,6 @@
   const elDetailBody  = document.getElementById('detail-body');
   const elDetailClose = document.getElementById('detail-close');
   const elRefresh      = document.getElementById('btn-refresh');
-  const elUpdateAll    = document.getElementById('btn-update-all');
   const elOverlay      = document.getElementById('overlay');
   const elStatVuln     = document.getElementById('stat-vuln');
   const elStatVulnCard = document.getElementById('stat-vuln-card');
@@ -92,23 +96,54 @@
       case 'pypiSearchResult':
         handlePypiSearchResult(msg);
         break;
+      case 'conflicts':
+        allConflicts = msg.conflicts || [];
+        conflictsByPkg = new Map();
+        for (const c of allConflicts) {
+          const norm = n => String(n).toLowerCase().replace(/[-_.]+/g, '-');
+          [norm(c.package), norm(c.conflictingPackage)].forEach(key => {
+            if (!conflictsByPkg.has(key)) { conflictsByPkg.set(key, []); }
+            conflictsByPkg.get(key).push(c);
+          });
+        }
+        updateConflictStat();
+        if (activeTab === 'list') { renderTable(getFiltered()); }
+        break;
+      case 'pkgProgress':
+        updateRowProgress(msg.name, msg.stage, msg.percent);
+        break;
     }
   });
+
+  function updateRowProgress(pkgName, stage, percent) {
+    const tr = elTableBody?.querySelector(`tr[data-pkg="${CSS.escape(pkgName)}"]`);
+    if (!tr) return;
+    if (percent >= 100) {
+      tr.removeAttribute('data-progress');
+      tr.style.removeProperty('--row-progress');
+      const stageEl = tr.querySelector('.progress-stage');
+      if (stageEl) stageEl.remove();
+    } else {
+      tr.setAttribute('data-progress', '1');
+      tr.style.setProperty('--row-progress', `${percent}%`);
+      // Show stage label in the actions cell
+      const actGroup = tr.querySelector('.act-group');
+      if (actGroup) {
+        let stageEl = tr.querySelector('.progress-stage');
+        if (!stageEl) {
+          stageEl = document.createElement('span');
+          stageEl.className = 'progress-stage';
+          actGroup.appendChild(stageEl);
+        }
+        stageEl.textContent = stage;
+      }
+    }
+  }
 
   // ── Button handlers ───────────────────────────────────────────────────────
   elRefresh.addEventListener('click', () => {
     vscode.postMessage({ type: 'refresh' });
     showLoading('Refreshing...');
-  });
-
-  elUpdateAll.addEventListener('click', () => {
-    const toUpdate = allPackages
-      .filter(p => p.status === 'update-available')
-      .map(p => p.name);
-    if (!toUpdate.length) return;
-    elUpdateAll.disabled = true;
-    elUpdateAll.textContent = `Updating ${toUpdate.length} packages…`;
-    vscode.postMessage({ type: 'updateAllPackages', names: toUpdate });
   });
 
   const closeDetail = () => {
@@ -122,9 +157,48 @@
   });
 
   // ── Search / filter ───────────────────────────────────────────────────────
+  function updateFilterIndicators() {
+    if (elFilter)      elFilter.classList.toggle('active', elFilter.value !== 'all');
+    if (elFilterGroup) elFilterGroup.classList.toggle('active', elFilterGroup.value !== 'all');
+  }
+
   elSearch.addEventListener('input', () => renderAll());
-  elFilter.addEventListener('change', () => renderAll());
-  if (elFilterGroup) elFilterGroup.addEventListener('change', () => renderAll());
+  elFilter.addEventListener('change', () => {
+    // Deactivate stat-card filter if user manually picks a status
+    if (filterVuln || filterConflict) {
+      filterVuln = false; filterConflict = false; activeStatFilter = null;
+      document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
+    }
+    updateFilterIndicators();
+    renderAll();
+  });
+  if (elFilterGroup) elFilterGroup.addEventListener('change', () => { updateFilterIndicators(); renderAll(); });
+
+  // ── Stat card click-to-filter ─────────────────────────────────────────────
+  document.querySelectorAll('.stat-card.clickable').forEach(card => {
+    card.addEventListener('click', () => {
+      const f = card.dataset.filter;
+      const isActive = activeStatFilter === f;
+
+      // Reset all stat-card selections
+      document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
+      filterVuln = false; filterConflict = false;
+
+      if (isActive) {
+        // Toggle off — return to "all"
+        activeStatFilter = null;
+        elFilter.value = 'all';
+      } else {
+        activeStatFilter = f;
+        card.classList.add('selected');
+        if (f === 'vuln')     { filterVuln = true;     elFilter.value = 'all'; }
+        else if (f === 'conflict') { filterConflict = true; elFilter.value = 'all'; }
+        else                  { elFilter.value = f; }
+      }
+      updateFilterIndicators();
+      renderAll();
+    });
+  });
 
   // ── Column-header sort ────────────────────────────────────────────────────
   document.querySelectorAll('th[data-col]').forEach(th => {
@@ -216,7 +290,7 @@
     if (!elCopyToast) return;
     elCopyToast.textContent = msg;
     elCopyToast.classList.add('show');
-    setTimeout(() => elCopyToast.classList.remove('show'), 2000);
+    setTimeout(() => elCopyToast.classList.remove('show'), 3000);
   }
 
   // ── Bulk bar ──────────────────────────────────────────────────────────────
@@ -262,8 +336,8 @@
       } else {
         filtered.forEach(p => selectedPackages.delete(p.name));
       }
-      updateBulkBar();
       renderAll();
+      updateBulkBar();
     });
   }
 
@@ -368,7 +442,7 @@
     elAddPkgInstall.addEventListener('click', () => {
       if (!pendingInstallName) return;
       elAddPkgInstall.disabled = true;
-      elAddPkgInstall.innerHTML = '&#x23F3; Installing…';
+      elAddPkgInstall.innerHTML = '<span class="btn-spinner"></span>Installing…';
       vscode.postMessage({ type: 'installNew', name: pendingInstallName, version: pendingInstallVersion || undefined });
       hideAddPkgModal();
     });
@@ -428,11 +502,6 @@
       elSearch.focus();
       return;
     }
-    // U → update all (not when typing)
-    if (e.key === 'u' && !isInputFocused() && elUpdateAll && !elUpdateAll.disabled) {
-      elUpdateAll.click();
-      return;
-    }
   });
 
   function isInputFocused() {
@@ -474,7 +543,10 @@
         || (pkg.summary || '').toLowerCase().includes(query);
       const matchStatus = status === 'all' || pkg.status === status;
       const matchGroup  = group === 'all' || (pkg.group || 'main') === group;
-      return matchSearch && matchStatus && matchGroup;
+      const matchVuln   = !filterVuln || (pkg.vulnerabilities && pkg.vulnerabilities.length > 0);
+      const normPkg     = pkg.name.toLowerCase().replace(/[-_.]+/g, '-');
+      const matchConflict = !filterConflict || conflictsByPkg.has(normPkg);
+      return matchSearch && matchStatus && matchGroup && matchVuln && matchConflict;
     });
 
     filtered.sort((a, b) => {
@@ -539,6 +611,14 @@
     }
   }
 
+  // ── Conflict stat card ────────────────────────────────────────────────────
+  function updateConflictStat() {
+    const card = document.getElementById('stat-conflict-card');
+    const num  = document.getElementById('stat-conflict');
+    if (num)  { num.textContent = allConflicts.length; }
+    if (card) { card.style.display = allConflicts.length > 0 ? '' : 'none'; }
+  }
+
   // ── Stats Bar ─────────────────────────────────────────────────────────────
   function updateStats(packages) {
     const ok       = packages.filter(p => p.status === 'up-to-date').length;
@@ -552,13 +632,6 @@
 
     if (elStatVuln) elStatVuln.textContent = vulnPkgs;
     if (elStatVulnCard) elStatVulnCard.style.display = vulnPkgs > 0 ? '' : 'none';
-
-    if (elUpdateAll) {
-      elUpdateAll.style.display = updates > 0 ? 'inline-flex' : 'none';
-      if (!elUpdateAll.disabled) {
-        elUpdateAll.textContent = `\u2191 Update All (${updates})`;
-      }
-    }
 
     // Group breakdown
     const groupCounts = {};
@@ -821,11 +894,33 @@
 
   function renderTable(packages) {
     try {
+    // ── Result count bar ─────────────────────────────────────────────────────
+    const elResultCount = document.getElementById('result-count');
+    if (elResultCount) {
+      const isFiltered = packages.length < allPackages.length;
+      if (!isFiltered) {
+        elResultCount.innerHTML = '';
+      } else {
+        const clearBtn = `<span id="result-count-clear" title="Clear all filters">✕ Clear</span>`;
+        elResultCount.innerHTML =
+          `<span class="result-count-filter-active">Showing ${packages.length} of ${allPackages.length} packages</span>${clearBtn}`;
+        document.getElementById('result-count-clear')?.addEventListener('click', () => {
+          elSearch.value = '';
+          elFilter.value = 'all';
+          if (elFilterGroup) elFilterGroup.value = 'all';
+          filterVuln = false; filterConflict = false; activeStatFilter = null;
+          document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('selected'));
+          updateFilterIndicators();
+          renderAll();
+        });
+      }
+    }
+
     elTableBody.innerHTML = '';
 
     if (!packages.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--vscode-descriptionForeground)">No packages match your filter.</td>`;
+      tr.innerHTML = `<td colspan="7" style="text-align:center;padding:20px;color:var(--vscode-descriptionForeground)">No packages match your filter.</td>`;
       elTableBody.appendChild(tr);
       return;
     }
@@ -839,14 +934,18 @@
       const hasVuln        = pkg.vulnerabilities && pkg.vulnerabilities.length > 0;
       const grp            = pkg.group || 'main';
       const isSelected     = selectedPackages.has(pkg.name);
+      const normPkgName    = pkg.name.toLowerCase().replace(/[-_.]+/g, '-');
+      const hasConflict    = conflictsByPkg.has(normPkgName);
 
       // Row accent + staggered animation
+      tr.dataset.pkg = pkg.name;
       tr.classList.add(`row-${pkg.status || 'unknown'}`);
-      if (hasVuln) tr.classList.add('row-vulnerable');
+      if (hasVuln)     tr.classList.add('row-vulnerable');
+      if (hasConflict) tr.classList.add('row-conflict');
       tr.style.animationDelay = `${i * 18}ms`;
 
       const latestDisplay = hasUpdate
-        ? `<span class="ver ver-latest" data-copy="${esc(pkg.latestVersion)}" title="Click to copy" style="cursor:pointer">${esc(pkg.latestVersion)}</span>`
+        ? `<span class="ver ver-latest" data-copy="${esc(pkg.latestVersion)}" title="Click to copy" style="cursor:pointer">${esc(pkg.latestVersion)}<span class="copy-hint">⧉</span></span>`
         : `<span class="ver">${esc(pkg.latestVersion || '—')}</span>`;
 
       const groupTag = grp !== 'main'
@@ -854,10 +953,6 @@
         : '';
 
       const releaseDateDisplay = formatReleaseDate(pkg.releaseDate);
-
-      const pinBtn = pkg.installedVersion && pkg.source
-        ? `<button class="pin-btn" data-name="${esc(pkg.name)}" data-version="${esc(pkg.installedVersion)}" data-source="${esc(pkg.source)}" title="Pin to ==${esc(pkg.installedVersion)}">📌 Pin</button>`
-        : '';
 
       tr.innerHTML = `
         <td class="col-check"><input type="checkbox" class="pkg-check" data-name="${esc(pkg.name)}" ${isSelected ? 'checked' : ''}></td>
@@ -867,11 +962,12 @@
             <span class="pkg-ext-link" data-pypi="${esc(pkg.name)}" title="Open on PyPI">&#x2197;</span>
             ${pkg.source ? `<span class="pkg-source">${esc(pkg.source)}</span>` : ''}
             ${groupTag}
-            ${hasVuln   ? `<span class="inline-tag cve" title="${pkg.vulnerabilities.length} vulnerabilit${pkg.vulnerabilities.length !== 1 ? 'ies' : 'y'}">&#x1F534; CVE</span>` : ''}
+            ${hasVuln     ? `<span class="inline-tag cve" title="${pkg.vulnerabilities.length} vulnerabilit${pkg.vulnerabilities.length !== 1 ? 'ies' : 'y'}">&#x1F534; CVE</span>` : ''}
+            ${hasConflict ? `<span class="inline-tag conflict" title="${conflictsByPkg.get(normPkgName).length} dependency conflict(s)">&#x26A1; conflict</span>` : ''}
             ${!pkg.isUsed ? `<span class="inline-tag unused" title="No import found in project">&#x2298; unused?</span>` : ''}
           </div>
         </td>
-        <td><span class="ver" data-copy="${esc(pkg.installedVersion || '')}" title="Click to copy" style="cursor:pointer">${esc(pkg.installedVersion || '—')}</span></td>
+        <td><span class="ver" data-copy="${esc(pkg.installedVersion || '')}" title="Click to copy" style="cursor:pointer">${esc(pkg.installedVersion || '—')}<span class="copy-hint">⧉</span></span></td>
         <td>${latestDisplay}</td>
         <td>${statusBadge(pkg.status)}</td>
         <td><span style="font-size:11px;color:var(--vscode-descriptionForeground)">${esc(releaseDateDisplay)}</span></td>
@@ -880,7 +976,6 @@
             ${hasUpdate    ? `<button class="action-btn success btn-update"  data-name="${esc(pkg.name)}" title="Update to ${esc(pkg.latestVersion)}">&#x2B06; Update</button>` : ''}
             ${notInstalled ? `<button class="action-btn primary btn-install" data-name="${esc(pkg.name)}" title="Install ${esc(pkg.name)}">&#x2B07; Install</button>` : ''}
             ${hasHistory && !notInstalled ? `<button class="action-btn secondary btn-rollback" data-name="${esc(pkg.name)}" title="Rollback">&#x21A9; Rollback</button>` : ''}
-            ${pinBtn}
             ${!pkg.isUsed && pkg.source ? `<button class="action-btn danger btn-remove-req" data-name="${esc(pkg.name)}" data-source="${esc(pkg.source)}" title="Remove from ${esc(pkg.source)}">&#x1F5D1; Remove</button>` : ''}
           </div>
         </td>
@@ -910,17 +1005,6 @@
       });
     });
 
-    elTableBody.querySelectorAll('.pin-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        vscode.postMessage({
-          type: 'pinVersion',
-          name: btn.dataset.name,
-          version: btn.dataset.version,
-          source: btn.dataset.source,
-        });
-      });
-    });
-
     elTableBody.querySelectorAll('.pkg-name-link').forEach(el => {
       el.addEventListener('click', () => {
         const pkg = allPackages.find(p => p.name === el.dataset.name);
@@ -942,7 +1026,7 @@
     elTableBody.querySelectorAll('.btn-update').forEach(btn => {
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        btn.textContent = 'Updating…';
+        btn.innerHTML = '<span class="btn-spinner"></span>Updating…';
         vscode.postMessage({ type: 'updatePackage', name: btn.dataset.name });
       });
     });
@@ -950,7 +1034,7 @@
     elTableBody.querySelectorAll('.btn-install').forEach(btn => {
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        btn.textContent = 'Installing…';
+        btn.innerHTML = '<span class="btn-spinner"></span>Installing…';
         vscode.postMessage({ type: 'updatePackage', name: btn.dataset.name });
       });
     });
@@ -964,7 +1048,7 @@
           : null;
         if (!prev) return;
         btn.disabled = true;
-        btn.textContent = 'Rolling back…';
+        btn.innerHTML = '<span class="btn-spinner"></span>Rolling back…';
         vscode.postMessage({ type: 'rollbackPackage', name: btn.dataset.name, version: prev });
       });
     });
@@ -1073,54 +1157,98 @@
     listEl.style.display = 'block';
 
     const actionLabels = {
-      'pip-install': 'Updated / Installed',
-      'detected': 'Detected',
+      'pip-install':  'Updated / Installed',
+      'detected':     'Detected',
       'pip-rollback': 'Rolled back',
     };
 
-    historyEntries.forEach(entry => {
-      const div = document.createElement('div');
-      div.className = 'history-entry';
+    // ── Date grouping ──────────────────────────────────────────────────────
+    const now       = new Date();
+    const startOfToday     = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(startOfToday); startOfYesterday.setDate(startOfToday.getDate() - 1);
+    const startOfWeek      = new Date(startOfToday); startOfWeek.setDate(startOfToday.getDate() - 7);
 
-      const dotClass = entry.source === 'pip-install'
-        ? 'pip-install'
-        : entry.source === 'pip-rollback'
-          ? 'pip-rollback'
-          : 'detected';
-
-      let timeStr = '';
+    function dateGroup(dateStr) {
       try {
-        const d = new Date(entry.installedAt);
-        timeStr = d.toLocaleString();
-      } catch {
-        timeStr = entry.installedAt || '';
-      }
+        const d = new Date(dateStr);
+        if (d >= startOfToday)     return 'Today';
+        if (d >= startOfYesterday) return 'Yesterday';
+        if (d >= startOfWeek)      return 'This Week';
+        return 'Earlier';
+      } catch { return 'Earlier'; }
+    }
 
-      const actionLabel = actionLabels[entry.source] || entry.source;
+    const groupOrder = ['Today', 'Yesterday', 'This Week', 'Earlier'];
+    const groups = {};
+    for (const entry of historyEntries) {
+      const g = dateGroup(entry.installedAt);
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(entry);
+    }
 
-      div.innerHTML = `
-        <div class="history-dot ${dotClass}"></div>
-        <div style="flex:1">
-          <div>
-            <span class="history-action">${esc(entry.packageName)}</span>
-            <span style="color:var(--vscode-descriptionForeground); margin-left:6px; font-size:11px;">${esc(actionLabel)}</span>
-            <span style="margin-left:6px; font-family:monospace; font-size:11px; background:var(--vscode-badge-background); padding:1px 5px; border-radius:3px;">${esc(entry.version)}</span>
+    for (const groupName of groupOrder) {
+      if (!groups[groupName]) continue;
+
+      // Group header
+      const header = document.createElement('div');
+      header.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vscode-descriptionForeground);padding:10px 0 4px;opacity:.7;';
+      header.textContent = groupName;
+      listEl.appendChild(header);
+
+      for (const entry of groups[groupName]) {
+        const div = document.createElement('div');
+        div.className = 'history-entry';
+
+        const dotClass = entry.source === 'pip-install'
+          ? 'pip-install'
+          : entry.source === 'pip-rollback' ? 'pip-rollback' : 'detected';
+
+        let timeStr = '';
+        try { timeStr = new Date(entry.installedAt).toLocaleString(); }
+        catch { timeStr = entry.installedAt || ''; }
+
+        const actionLabel = actionLabels[entry.source] || entry.source;
+
+        div.innerHTML = `
+          <div class="history-dot ${dotClass}"></div>
+          <div style="flex:1">
+            <div>
+              <span class="history-action">${esc(entry.packageName)}</span>
+              <span style="color:var(--vscode-descriptionForeground);margin-left:6px;font-size:11px;">${esc(actionLabel)}</span>
+              <span style="margin-left:6px;font-family:monospace;font-size:11px;background:var(--vscode-badge-background);padding:1px 5px;border-radius:3px;">${esc(entry.version)}</span>
+            </div>
+            <div class="history-time">${esc(timeStr)}</div>
           </div>
-          <div class="history-time">${esc(timeStr)}</div>
-        </div>
-      `;
-      listEl.appendChild(div);
-    });
+        `;
+        listEl.appendChild(div);
+      }
+    }
   }
 
   // ── Detail Panel ──────────────────────────────────────────────────────────
   function showDetail(pkg) {
+    const normName = pkg.name.toLowerCase().replace(/[-_.]+/g, '-');
     elDetailName.textContent = pkg.name;
 
     const history = pkg.allVersions || [];
     const versionChips = history.slice(0, 20).map(v =>
       `<span class="version-chip" data-version="${esc(v)}" data-pkg="${esc(pkg.name)}" title="Install ${v}">${esc(v)}</span>`
     ).join('');
+
+    const pkgConflicts = conflictsByPkg.get(normName) || [];
+    const conflictsHtml = pkgConflicts.length > 0 ? `
+      <div class="field">
+        <label style="color:#f97316">&#x26A1; Dependency Conflicts (${pkgConflicts.length})</label>
+        ${pkgConflicts.map(c => `<div class="vuln-card">
+          <div class="vuln-id">${esc(c.package)} ${esc(c.version)} requires <code>${esc(c.requirement)}</code></div>
+          <div class="vuln-desc">${
+            c.conflictingVersion === 'not installed'
+              ? `<strong>${esc(c.conflictingPackage)}</strong> is not installed`
+              : `But <strong>${esc(c.conflictingPackage)} ${esc(c.conflictingVersion)}</strong> is installed`
+          }</div>
+        </div>`).join('')}
+      </div>
+    ` : '';
 
     const vulns = pkg.vulnerabilities && pkg.vulnerabilities.length > 0 ? pkg.vulnerabilities : [];
     const vulnHtml = vulns.length > 0 ? `
@@ -1174,6 +1302,7 @@
       <div class="field"><label>Source file</label><div class="field-value">${esc(pkg.source || '—')}</div></div>
       ${pypiLinkHtml}
       ${pkg.requires && pkg.requires.length ? `<div class="field"><label>Requires (${pkg.requires.length})</label><div class="field-value" style="color:var(--vscode-descriptionForeground);line-height:1.7">${pkg.requires.map(r => `<code>${esc(r)}</code>`).join(' ')}</div></div>` : ''}
+      ${conflictsHtml}
       ${vulnHtml}
       ${history.length ? `<div class="field"><label>Available versions</label><div style="margin-top:6px;line-height:1.8">${versionChips}</div></div>` : ''}
     `;
