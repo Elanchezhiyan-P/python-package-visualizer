@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as toml from '@iarna/toml';
 import { Logger } from '../utils/logger.js';
 
-export type DepFileType = 'requirements.txt' | 'pyproject.toml' | 'setup.py';
+export type DepFileType = 'requirements.txt' | 'pyproject.toml' | 'setup.py' | 'setup.cfg' | 'Pipfile';
 
 export interface ConflictInfo {
   package: string;
@@ -96,6 +96,8 @@ export class PackageScanner {
   private findDepFiles(root: string): string[] {
     const candidates = [
       path.join(root, 'setup.py'),
+      path.join(root, 'setup.cfg'),
+      path.join(root, 'Pipfile'),
       path.join(root, 'pyproject.toml'),
       path.join(root, 'requirements.txt'),
       path.join(root, 'requirements-dev.txt'),
@@ -133,6 +135,12 @@ export class PackageScanner {
       if (basename === 'setup.py') {
         return this.parseSetupPy(filePath);
       }
+      if (basename === 'setup.cfg') {
+        return this.parseSetupCfg(filePath);
+      }
+      if (basename === 'Pipfile') {
+        return this.parsePipfile(filePath);
+      }
     } catch (err) {
       this.logger.error(`Failed to parse ${filePath}: ${String(err)}`);
     }
@@ -141,8 +149,12 @@ export class PackageScanner {
 
   private parseRequirementsTxt(
     filePath: string,
-    group: 'main' | 'dev' | 'test' | 'docs' | 'lint' | 'optional' = 'main'
+    group: 'main' | 'dev' | 'test' | 'docs' | 'lint' | 'optional' = 'main',
+    visited = new Set<string>()
   ): ScannedPackage[] {
+    if (visited.has(filePath)) { return []; }
+    visited.add(filePath);
+
     const content = fs.readFileSync(filePath, 'utf-8');
     const results: ScannedPackage[] = [];
 
@@ -153,10 +165,22 @@ export class PackageScanner {
     for (const rawLine of lines) {
       // Strip inline comments
       const line = rawLine.split('#')[0].trim();
+      if (!line) { continue; }
 
-      // Skip empty, options (-i, -r, -c, --), editable (-e), URLs
+      // Follow -r / --requirement includes
+      const includeMatch = line.match(/^(?:-r|--requirement)\s+(.+)$/);
+      if (includeMatch) {
+        const includePath = includeMatch[1].trim();
+        const absInclude = path.resolve(path.dirname(filePath), includePath);
+        if (fs.existsSync(absInclude)) {
+          const includeGroup = this.getGroupFromFileName(path.basename(absInclude));
+          results.push(...this.parseRequirementsTxt(absInclude, includeGroup, visited));
+        }
+        continue;
+      }
+
+      // Skip other options (-i, --index-url, -c, -e, --extra-index-url, etc.) and URLs
       if (
-        !line ||
         line.startsWith('-') ||
         line.startsWith('http://') ||
         line.startsWith('https://')
@@ -371,6 +395,135 @@ export class PackageScanner {
     }
 
     return results;
+  }
+
+  private parseSetupCfg(filePath: string): ScannedPackage[] {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const results: ScannedPackage[] = [];
+
+    // Split into INI sections by lines starting with [
+    const sectionParts = content.split(/^(?=\[)/m);
+
+    for (const part of sectionParts) {
+      const headerMatch = part.match(/^\[([^\]]+)\]/);
+      if (!headerMatch) { continue; }
+
+      const sectionName = headerMatch[1].trim();
+      const body = part.slice(headerMatch[0].length);
+
+      if (sectionName === 'options') {
+        const depsValue = this.extractIniKey(body, 'install_requires');
+        if (depsValue) {
+          for (const dep of this.splitSetupCfgDeps(depsValue)) {
+            const pkg = this.parseSingleDep(dep, 'setup.cfg', 'main');
+            if (pkg) { results.push(pkg); }
+          }
+        }
+      } else if (sectionName === 'options.extras_require') {
+        for (const { key, value } of this.extractIniPairs(body)) {
+          const grp = this.keyToGroup(key);
+          for (const dep of this.splitSetupCfgDeps(value)) {
+            const pkg = this.parseSingleDep(dep, 'setup.cfg', grp);
+            if (pkg) { results.push(pkg); }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  private parsePipfile(filePath: string): ScannedPackage[] {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = toml.parse(content) as Record<string, unknown>;
+    } catch (err) {
+      this.logger.warn(`Failed to parse Pipfile as TOML: ${String(err)}`);
+      return [];
+    }
+
+    const results: ScannedPackage[] = [];
+    const skip = new Set(['python_version', 'python_full_version']);
+
+    const processSection = (
+      section: Record<string, unknown>,
+      group: 'main' | 'dev'
+    ): void => {
+      for (const [pkgName, version] of Object.entries(section)) {
+        if (skip.has(pkgName.toLowerCase())) { continue; }
+        let spec = '';
+        let extras: string[] = [];
+        if (typeof version === 'string') {
+          spec = version === '*' ? '' : version;
+        } else if (typeof version === 'object' && version !== null) {
+          const v = version as Record<string, unknown>;
+          spec = typeof v['version'] === 'string' ? (v['version'] === '*' ? '' : v['version']) : '';
+          if (Array.isArray(v['extras'])) {
+            extras = (v['extras'] as unknown[]).map(String);
+          }
+        }
+        results.push({
+          name: this.normalizeName(pkgName),
+          specifiedVersion: spec,
+          installedVersion: '',
+          source: 'Pipfile',
+          extras,
+          requires: [],
+          group,
+        });
+      }
+    };
+
+    const packages = parsed['packages'] as Record<string, unknown> | undefined;
+    const devPackages = parsed['dev-packages'] as Record<string, unknown> | undefined;
+    if (packages) { processSection(packages, 'main'); }
+    if (devPackages) { processSection(devPackages, 'dev'); }
+
+    return results;
+  }
+
+  private parseSingleDep(
+    dep: string,
+    source: DepFileType,
+    group: ScannedPackage['group']
+  ): ScannedPackage | null {
+    const m = dep.match(
+      /^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)(\[([^\]]+)\])?(.*)?$/
+    );
+    if (!m) { return null; }
+    return {
+      name: this.normalizeName(m[1]),
+      specifiedVersion: (m[5] ?? '').trim(),
+      installedVersion: '',
+      source,
+      extras: m[4] ? m[4].split(',').map(e => e.trim()) : [],
+      requires: [],
+      group,
+    };
+  }
+
+  private extractIniKey(body: string, key: string): string | null {
+    // Matches: key = value\n  continuation\n  continuation
+    const re = new RegExp(`^${key}\\s*=\\s*(.*(?:\\n[ \\t]+.*)*)`, 'm');
+    const m = body.match(re);
+    return m ? m[1] : null;
+  }
+
+  private extractIniPairs(body: string): Array<{ key: string; value: string }> {
+    const pairs: Array<{ key: string; value: string }> = [];
+    const re = /^([\w-]+)\s*=\s*(.*(?:\n[ \t]+.*)*)$/gm;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) {
+      pairs.push({ key: m[1], value: m[2] });
+    }
+    return pairs;
+  }
+
+  private splitSetupCfgDeps(value: string): string[] {
+    return value.split(/[\n;]/)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#') && /^[A-Za-z]/.test(l));
   }
 
   private async getPipInstalledVersions(

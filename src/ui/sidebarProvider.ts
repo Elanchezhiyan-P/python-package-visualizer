@@ -37,9 +37,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.messageHandlers.push(handler);
   }
 
-  // No-op stubs — sidebar is now a static welcome page only
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sendPackages(_packages: PackageDisplayData[], _stats?: ScanStats, _type?: 'init' | 'update'): void {}
+  sendPackages(packages: PackageDisplayData[], _stats?: ScanStats, _type?: 'init' | 'update'): void {
+    if (!this.view) { return; }
+    const ok       = packages.filter(p => p.status === 'up-to-date').length;
+    const updates  = packages.filter(p => p.status === 'update-available').length;
+    const vulnerable = packages.filter(p => p.vulnerabilities && p.vulnerabilities.length > 0).length;
+    void this.view.webview.postMessage({ type: 'sidebarStats', ok, updates, vulnerable });
+  }
   sendProgress(_message: string): void {}
 
   isVisible(): boolean {
@@ -97,6 +101,29 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       line-height: 1.6;
       max-width: 220px;
     }
+
+    /* ── Live Stats ────────────────────── */
+    #live-stats {
+      display: none;
+      margin: 10px 16px 0;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    #live-stats.visible { display: flex; }
+    .ls-card {
+      flex: 1; min-width: 60px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 7px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .ls-card .ls-num  { font-size: 18px; font-weight: 700; line-height: 1.1; }
+    .ls-card .ls-lbl  { opacity: .75; margin-top: 2px; text-align: center; }
+    .ls-card.ok       { background: rgba(74,222,128,.1);  color: #4ade80; border-color: rgba(74,222,128,.2); }
+    .ls-card.update   { background: rgba(251,146,60,.1);  color: #fb923c; border-color: rgba(251,146,60,.2); }
+    .ls-card.vuln     { background: rgba(248,113,113,.1); color: #f87171; border-color: rgba(248,113,113,.2); }
 
     /* ── CTA button ────────────────────── */
     .cta {
@@ -361,6 +388,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     <div class="hero-desc">Manage and visualize your Python workspace dependencies inside VS Code.</div>
   </div>
 
+  <!-- Live Stats -->
+  <div id="live-stats">
+    <div class="ls-card ok">
+      <span class="ls-num" id="ls-ok">—</span>
+      <span class="ls-lbl">up to date</span>
+    </div>
+    <div class="ls-card update">
+      <span class="ls-num" id="ls-update">—</span>
+      <span class="ls-lbl">updates</span>
+    </div>
+    <div class="ls-card vuln">
+      <span class="ls-num" id="ls-vuln">—</span>
+      <span class="ls-lbl">vulnerable</span>
+    </div>
+  </div>
+
   <!-- CTA -->
   <div class="cta">
     <button class="open-btn" id="btn-open">
@@ -524,6 +567,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       openUrl('https://github.com/Elanchezhiyan-P'));
     document.getElementById('link-linkedin').addEventListener('click', () =>
       openUrl('https://www.linkedin.com/in/elanchezhiyan-p/'));
+
+    window.addEventListener('message', event => {
+      const msg = event.data;
+      if (msg.type === 'sidebarStats') {
+        document.getElementById('ls-ok').textContent     = msg.ok;
+        document.getElementById('ls-update').textContent = msg.updates;
+        document.getElementById('ls-vuln').textContent   = msg.vulnerable;
+        document.getElementById('live-stats').classList.add('visible');
+      }
+    });
   </script>
 </body>
 </html>`;

@@ -2,7 +2,7 @@
 
 > Visualize, manage, and audit your Python workspace dependencies — all from inside VS Code.
 
-![Version](https://img.shields.io/badge/version-0.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![VS Code](https://img.shields.io/badge/vscode-%5E1.85.0-blue)
 
@@ -15,13 +15,14 @@
 - 🕸️ **Dependency Graph** — Interactive D3.js tree with collapsible nodes
 - 🕒 **Update History** — Timeline of all installs, updates and rollbacks
 - 📤 **Export Reports** — Export package status as Markdown or JSON
-- 📌 **Pin Versions** — Lock packages to their current version in requirements.txt
 - ➕ **Add Packages** — Search PyPI and install new packages directly
 - 🗂️ **Group Detection** — Auto-detects dev/test/docs/lint dependency groups
-- 🌐 **Multi-root Workspace** — Scans all workspace folders automatically
-- 🔒 **License Info** — Displays package license type
+- 🔒 **License Compliance** — Classifies licenses as Safe / Caution / Restricted
 - 🐍 **Python Version Compatibility** — Shows required Python version per package
 - 📊 **Download Stats** — Weekly PyPI download counts
+- 💾 **Snapshots** — Save and restore full environment state
+- 🛡️ **Safe Mode** — Block major-version updates to prevent breaking changes
+- ⚡ **uv Support** — Automatically uses `uv pip` if uv is installed
 
 ## 🚀 Getting Started
 
@@ -29,10 +30,7 @@
 
 - [VS Code](https://code.visualstudio.com/) `1.85.0` or newer
 - Python installed and accessible (or a virtual environment)
-- A Python project with one of:
-  - `requirements.txt`
-  - `pyproject.toml`
-  - `setup.py`
+- A Python project with one of: `requirements.txt`, `pyproject.toml`, `setup.py`, `setup.cfg`, or `Pipfile`
 
 ### Installation
 
@@ -42,6 +40,15 @@
 4. Click **Install**
 
 Or install from the [VS Code Marketplace](#).
+
+---
+
+## 📚 Documentation
+
+Full documentation is available on the [GitHub Wiki](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki):
+
+- [Home](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Home) — Overview, features, and quick start
+- [Supported Project Types](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Supported-Project-Types) — All supported dependency file formats
 
 ---
 
@@ -99,9 +106,6 @@ Click **⬇ Install** on any row with status `Not installed`.
 
 #### Remove from Requirements
 Click **🗑 Remove** on any row marked as `unused?`. This removes the package line from its requirements file after confirmation. The package itself is **not** uninstalled from your environment.
-
-#### Update All
-Click **⬆ Update All (n)** in the header to update all outdated packages in one go.
 
 ---
 
@@ -178,7 +182,6 @@ A chronological timeline of every **install, update, and rollback** performed th
 |---|---|
 | `R` | Refresh packages |
 | `/` or `Ctrl+F` | Focus search bar |
-| `U` | Trigger Update All |
 | `Esc` | Close detail panel / modal |
 
 ---
@@ -201,10 +204,14 @@ Open **Settings** (`Ctrl+,`) and search for `pythonPackageVisualizer`:
 | File | Parsed |
 |---|---|
 | `requirements.txt` | ✅ |
-| `requirements-dev.txt` | ✅ (group: dev) |
-| `requirements-test.txt` | ✅ (group: test) |
-| `pyproject.toml` | ✅ (`[project.dependencies]`, `[tool.poetry.dependencies]`) |
-| `setup.py` | ✅ (`install_requires`) |
+| `requirements-dev.txt`, `requirements-test.txt`, etc. | ✅ (auto group: dev / test / docs / lint) |
+| `-r base.txt` includes | ✅ (followed recursively) |
+| `pyproject.toml` | ✅ PEP 621 + Poetry (including named groups) |
+| `setup.py` | ✅ `install_requires` + `extras_require` |
+| `setup.cfg` | ✅ `[options]` + `[options.extras_require]` |
+| `Pipfile` | ✅ `[packages]` + `[dev-packages]` |
+
+→ See [Supported Project Types](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Supported-Project-Types) for full details.
 
 ---
 

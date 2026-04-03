@@ -10,6 +10,7 @@ import { WebviewPanel } from '../ui/webviewPanel.js';
 import { SidebarProvider } from '../ui/sidebarProvider.js';
 import { StatusBarManager } from '../ui/statusBarManager.js';
 import { RequirementsSync } from '../modules/requirementsSync.js';
+import { SnapshotManager } from '../services/snapshotManager.js';
 import type { PackageDisplayData, ScanStats, HistoryDisplayEntry } from '../ui/webviewPanel.js';
 import type { ScannedPackage } from '../modules/packageScanner.js';
 import type { VersionCheckResult } from '../services/versionChecker.js';
@@ -17,6 +18,7 @@ import type { VersionCheckResult } from '../services/versionChecker.js';
 export class CommandController {
   private readonly importScanner: ImportScanner;
   private readonly reqSync: RequirementsSync;
+  private readonly snapshots: SnapshotManager;
   private lastPackages: ScannedPackage[] = [];
   private lastCheckResults: VersionCheckResult[] = [];
 
@@ -32,6 +34,7 @@ export class CommandController {
   ) {
     this.importScanner = new ImportScanner(logger);
     this.reqSync = new RequirementsSync(logger);
+    this.snapshots = new SnapshotManager(context.globalStorageUri.fsPath, logger);
   }
 
   registerAll(): void {
@@ -111,6 +114,48 @@ export class CommandController {
           const m = msg as { type: string; names: string[]; sources: string[] };
           for (let i = 0; i < m.names.length; i++) {
             await this.removeFromRequirements(m.names[i], m.sources[i] ?? '');
+          }
+          break;
+        }
+        case 'takeSnapshot': {
+          const root = this.getWorkspaceRoot();
+          if (root) {
+            this.snapshots.takeSnapshot(root, (msg as { type: string; name: string }).name, this.lastPackages);
+            void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
+            void vscode.window.showInformationMessage('Python Packages: Snapshot saved ✅');
+          }
+          break;
+        }
+        case 'restoreSnapshot': {
+          const root = this.getWorkspaceRoot();
+          if (!root) { break; }
+          const snap = this.snapshots.getSnapshot(root, (msg as { type: string; id: string }).id);
+          if (!snap) { break; }
+          const confirm = await vscode.window.showWarningMessage(
+            `Restore snapshot "${snap.name}"? This will install pinned versions for ${Object.keys(snap.packages).length} packages.`,
+            'Restore', 'Cancel'
+          );
+          if (confirm !== 'Restore') { break; }
+          for (const [name, version] of Object.entries(snap.packages)) {
+            const { exe, args } = await this.buildInstallSpawnArgs([`${name}==${version}`], root);
+            try { await this.runInstallTracked(exe, args, root, name); } catch { /* continue */ }
+          }
+          void vscode.window.showInformationMessage(`Python Packages: Restored "${snap.name}" ✅`);
+          await this.refreshVisualizer();
+          break;
+        }
+        case 'deleteSnapshot': {
+          const root = this.getWorkspaceRoot();
+          if (root) {
+            this.snapshots.deleteSnapshot(root, (msg as { type: string; id: string }).id);
+            void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
+          }
+          break;
+        }
+        case 'listSnapshots': {
+          const root = this.getWorkspaceRoot();
+          if (root) {
+            void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
           }
           break;
         }
@@ -780,6 +825,7 @@ export class CommandController {
         license: result?.license ?? '',
         pythonRequires: result?.pythonRequires ?? '',
         weeklyDownloads: result?.weeklyDownloads ?? 0,
+        installSize: result?.installSize,
       };
     });
   }
@@ -789,7 +835,7 @@ export class CommandController {
     if (!this.statusBar) { return; }
     const outdated = checkResults.filter(r => r.status === 'update-available').length;
     const vulnerable = checkResults.filter(r => r.vulnerabilities && r.vulnerabilities.length > 0).length;
-    this.statusBar.update(outdated, vulnerable);
+    this.statusBar.update(outdated, vulnerable, checkResults.length);
   }
 
   /** Returns the install command for either uv or pip, depending on availability. */
