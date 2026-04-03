@@ -1,4 +1,4 @@
-name: Publish to VS Code Marketplace
+name: Publish to VS Code & OpenVSX Marketplace
 
 on:
   push:
@@ -26,10 +26,19 @@ jobs:
       - name: Build extension
         run: npm run build
 
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
+      - name: Install vsce & ovsx
+        run: npm install -g @vscode/vsce ovsx
+
+      - name: Package extension
+        run: vsce package
 
       - name: Publish to Marketplace
         run: vsce publish --no-dependencies
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+        # ✅ Publish to OpenVSX
+      - name: Publish to OpenVSX
+        run: ovsx publish *.vsix -p $OVSX_PAT
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
