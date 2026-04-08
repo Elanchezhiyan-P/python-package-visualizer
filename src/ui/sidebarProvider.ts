@@ -21,13 +21,38 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this.getWelcomeHtml();
 
-    webviewView.webview.onDidReceiveMessage((msg: { type: string }) => {
+    webviewView.webview.onDidReceiveMessage((msg: { type: string; key?: string; value?: unknown }) => {
       this.logger.debug(`Sidebar message: ${msg.type}`);
-      // "openPanel" → open the main editor tab
+
       if (msg.type === 'openPanel') {
         void vscode.commands.executeCommand('extension.showPackageVisualizer');
         return;
       }
+
+      if (msg.type === 'getSettings') {
+        const config = vscode.workspace.getConfiguration('pythonPackageVisualizer');
+        const settings = {
+          showImportCodeLens: config.get<boolean>('showImportCodeLens', true),
+          showImportHover:    config.get<boolean>('showImportHover', true),
+          autoCheckOnOpen:    config.get<boolean>('autoCheckOnOpen', true),
+          notifyOnOutdated:   config.get<boolean>('notifyOnOutdated', true),
+          updateCheckSchedule: config.get<string>('updateCheckSchedule', 'off'),
+          showFunctionMetrics:    config.get<boolean>('showFunctionMetrics', true),
+          showMethodCallHover:    config.get<boolean>('showMethodCallHover', true),
+          showComplexityWarnings: config.get<boolean>('showComplexityWarnings', true),
+          showTypeHintCoverage:   config.get<boolean>('showTypeHintCoverage', true),
+          showDocstringWarnings:  config.get<boolean>('showDocstringWarnings', true),
+        };
+        void this.view?.webview.postMessage({ type: 'settings', settings });
+        return;
+      }
+
+      if (msg.type === 'updateSetting' && msg.key) {
+        const config = vscode.workspace.getConfiguration('pythonPackageVisualizer');
+        void config.update(msg.key, msg.value, vscode.ConfigurationTarget.Global);
+        return;
+      }
+
       // Forward any other actions (update / rollback / refresh) to handlers
       this.messageHandlers.forEach(h => h(msg as WebviewMessage));
     });
@@ -376,6 +401,85 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       color: var(--vscode-descriptionForeground);
       line-height: 1.5;
     }
+
+    /* ── Settings ──────────────────────── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--vscode-descriptionForeground);
+      padding: 18px 16px 8px;
+      opacity: .8;
+    }
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+      cursor: pointer;
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-info { flex: 1; min-width: 0; }
+    .setting-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--vscode-foreground);
+    }
+    .setting-desc {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .toggle-switch { flex-shrink: 0; }
+    .toggle-track {
+      width: 32px;
+      height: 18px;
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 10px;
+      position: relative;
+      transition: background .15s;
+      cursor: pointer;
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: var(--vscode-descriptionForeground);
+      border-radius: 50%;
+      transition: left .18s ease, background .15s;
+    }
+    .toggle-switch.on .toggle-track {
+      background: var(--vscode-button-background);
+      border-color: var(--vscode-button-background);
+    }
+    .toggle-switch.on .toggle-thumb {
+      left: 16px;
+      background: white;
+    }
+    .setting-select {
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .select-row { cursor: default; }
   </style>
 </head>
 <body>
@@ -487,6 +591,107 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
+  <div class="section-label">SETTINGS</div>
+  <div class="settings-list">
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Import annotations</div>
+        <div class="setting-desc">Package badges above import lines</div>
+      </div>
+      <div class="toggle-switch" data-setting="showImportCodeLens">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Show hover info</div>
+        <div class="setting-desc">Tooltip with package details on hover</div>
+      </div>
+      <div class="toggle-switch" data-setting="showImportHover">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Auto-check on open</div>
+        <div class="setting-desc">Scan workspace when project loads</div>
+      </div>
+      <div class="toggle-switch" data-setting="autoCheckOnOpen">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Notify on outdated</div>
+        <div class="setting-desc">Show banner when updates available</div>
+      </div>
+      <div class="toggle-switch" data-setting="notifyOnOutdated">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <div class="setting-row select-row">
+      <div class="setting-info">
+        <div class="setting-name">Update check schedule</div>
+        <div class="setting-desc">Periodic background check</div>
+      </div>
+      <select class="setting-select" data-setting="updateCheckSchedule">
+        <option value="off">Off</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-label">CODE INSIGHTS</div>
+  <div class="settings-list">
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Function metrics</div>
+        <div class="setting-desc">Show line count, references &amp; complexity</div>
+      </div>
+      <div class="toggle-switch" data-setting="showFunctionMetrics">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Method call hover</div>
+        <div class="setting-desc">Package info &amp; API cost on hover</div>
+      </div>
+      <div class="toggle-switch" data-setting="showMethodCallHover">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Complexity warnings</div>
+        <div class="setting-desc">Warn when functions are too complex</div>
+      </div>
+      <div class="toggle-switch" data-setting="showComplexityWarnings">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Type hint coverage</div>
+        <div class="setting-desc">Warn about missing type hints</div>
+      </div>
+      <div class="toggle-switch" data-setting="showTypeHintCoverage">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+    <label class="setting-row">
+      <div class="setting-info">
+        <div class="setting-name">Docstring warnings</div>
+        <div class="setting-desc">Warn about missing docstrings</div>
+      </div>
+      <div class="toggle-switch" data-setting="showDocstringWarnings">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </label>
+  </div>
+
   <!-- Quick Links -->
   <div class="section">
     <div class="section-title">Quick Links</div>
@@ -568,6 +773,59 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     document.getElementById('link-linkedin').addEventListener('click', () =>
       openUrl('https://www.linkedin.com/in/elanchezhiyan-p/'));
 
+    // ── Settings ─────────────────────────────────────────
+    const settingsState = {
+      showImportCodeLens: true,
+      showImportHover: true,
+      autoCheckOnOpen: true,
+      notifyOnOutdated: true,
+      updateCheckSchedule: 'off',
+      showFunctionMetrics: true,
+      showMethodCallHover: true,
+      showComplexityWarnings: true,
+      showTypeHintCoverage: true,
+      showDocstringWarnings: true,
+    };
+
+    // Request current settings from extension
+    vscode.postMessage({ type: 'getSettings' });
+
+    // Apply settings to UI
+    function applySettings(s) {
+      Object.assign(settingsState, s);
+      document.querySelectorAll('.toggle-switch').forEach(el => {
+        const key = el.dataset.setting;
+        if (settingsState[key]) el.classList.add('on');
+        else el.classList.remove('on');
+      });
+      document.querySelectorAll('.setting-select').forEach(el => {
+        const key = el.dataset.setting;
+        if (settingsState[key]) el.value = settingsState[key];
+      });
+    }
+
+    // Toggle handler
+    document.querySelectorAll('.toggle-switch').forEach(el => {
+      el.addEventListener('click', () => {
+        const key = el.dataset.setting;
+        const newVal = !settingsState[key];
+        settingsState[key] = newVal;
+        if (newVal) el.classList.add('on');
+        else el.classList.remove('on');
+        vscode.postMessage({ type: 'updateSetting', key, value: newVal });
+      });
+    });
+
+    // Select handler
+    document.querySelectorAll('.setting-select').forEach(el => {
+      el.addEventListener('change', () => {
+        const key = el.dataset.setting;
+        const value = el.value;
+        settingsState[key] = value;
+        vscode.postMessage({ type: 'updateSetting', key, value });
+      });
+    });
+
     window.addEventListener('message', event => {
       const msg = event.data;
       if (msg.type === 'sidebarStats') {
@@ -575,6 +833,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         document.getElementById('ls-update').textContent = msg.updates;
         document.getElementById('ls-vuln').textContent   = msg.vulnerable;
         document.getElementById('live-stats').classList.add('visible');
+      }
+      if (msg.type === 'settings') {
+        applySettings(msg.settings);
       }
     });
   </script>

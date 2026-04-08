@@ -7,6 +7,7 @@ export interface VersionHistoryEntry {
   version: string;
   installedAt: string;
   source: 'pip-install' | 'pip-rollback' | 'detected';
+  installTime?: number;
 }
 
 export interface PackageHistory {
@@ -31,7 +32,8 @@ export class VersionHistoryCache {
     workspaceRoot: string,
     packageName: string,
     version: string,
-    source: VersionHistoryEntry['source']
+    source: VersionHistoryEntry['source'],
+    installTime?: number
   ): void {
     const data = this.readFile(workspaceRoot);
     const normalized = this.normalizeName(packageName);
@@ -53,6 +55,7 @@ export class VersionHistoryCache {
       version,
       installedAt: new Date().toISOString(),
       source,
+      installTime,
     });
 
     this.writeFile(workspaceRoot, data);

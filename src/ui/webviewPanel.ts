@@ -4,6 +4,7 @@ import * as path from 'path';
 import { Logger } from '../utils/logger.js';
 import type { VersionCheckResult, VulnerabilityInfo } from '../services/versionChecker.js';
 import type { ScannedPackage, ConflictInfo } from '../modules/packageScanner.js';
+import { getAlternatives } from '../data/alternativesMap.js';
 export interface HistoryDisplayEntry {
   packageName: string;
   version: string;
@@ -29,12 +30,21 @@ export type WebviewMessage =
   | { type: 'takeSnapshot'; name: string }
   | { type: 'restoreSnapshot'; id: string }
   | { type: 'deleteSnapshot'; id: string }
-  | { type: 'listSnapshots' };
+  | { type: 'listSnapshots' }
+  | { type: 'generateRequirements' }
+  | { type: 'migrateToUv' }
+  | { type: 'migrateToPoetry' }
+  | { type: 'generateSetupScript'; format: 'bash' | 'powershell' | 'markdown' };
 
 export interface ScanStats {
   filesScanned: number;
   modulesFound: number;
   workspaceRoot: string;
+  totalSize?: number;
+  totalDownloads?: number;
+  securityScore?: number;
+  maintainerActivityScore?: number;
+  slowestPackages?: Array<{name: string; time: number}>;
 }
 
 export interface PackageDisplayData {
@@ -56,6 +66,12 @@ export interface PackageDisplayData {
   pythonRequires?: string;
   weeklyDownloads?: number;
   installSize?: number;
+  environment?: string;
+  hasConflict?: boolean;
+  pythonCompatible?: boolean;
+  pythonWarning?: string;
+  installTime?: number;
+  alternatives?: Array<{ name: string; reason: string; url?: string }>;
 }
 
 export class WebviewPanel {
@@ -192,6 +208,12 @@ export class WebviewPanel {
         license: result?.license ?? '',
         pythonRequires: result?.pythonRequires ?? '',
         weeklyDownloads: result?.weeklyDownloads ?? 0,
+        environment: pkg.environment,
+        hasConflict: pkg.hasConflict ?? false,
+        pythonCompatible: result?.pythonCompatible,
+        pythonWarning: result?.pythonWarning,
+        installSize: result?.installSize,
+        alternatives: getAlternatives(pkg.name),
       };
     });
   }

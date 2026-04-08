@@ -1,299 +1,247 @@
-# Python Package Visualizer
+<div align="center">
 
-> Visualize, manage, and audit your Python workspace dependencies — all from inside VS Code.
+# 📦 Python Package Visualizer
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![VS Code](https://img.shields.io/badge/vscode-%5E1.85.0-blue)
+**The ultimate dependency manager for Python projects in VS Code**
 
-## Features
+![Version](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![VS Code](https://img.shields.io/badge/vscode-%5E1.85.0-007ACC?style=flat-square&logo=visualstudiocode)
+![Python](https://img.shields.io/badge/python-3.8%2B-3776AB?style=flat-square&logo=python)
 
-- 📦 **Package List** — View all installed packages with installed vs latest versions
-- ⚠️ **Update Detection** — See which packages have updates available at a glance
-- 🔴 **CVE Vulnerability Badges** — Security vulnerabilities flagged from PyPI advisory database
-- 🔍 **Unused Package Detection** — Static import analysis across all `.py` files
-- 🕸️ **Dependency Graph** — Interactive D3.js tree with collapsible nodes
-- 🕒 **Update History** — Timeline of all installs, updates and rollbacks
-- 📤 **Export Reports** — Export package status as Markdown or JSON
-- ➕ **Add Packages** — Search PyPI and install new packages directly
-- 🗂️ **Group Detection** — Auto-detects dev/test/docs/lint dependency groups
-- 🔒 **License Compliance** — Classifies licenses as Safe / Caution / Restricted
-- 🐍 **Python Version Compatibility** — Shows required Python version per package
-- 📊 **Download Stats** — Weekly PyPI download counts
-- 💾 **Snapshots** — Save and restore full environment state
-- 🛡️ **Safe Mode** — Block major-version updates to prevent breaking changes
-- ⚡ **uv Support** — Automatically uses `uv pip` if uv is installed
+*Visualize, manage, and audit your Python workspace dependencies — all from inside VS Code.*
 
-## 🚀 Getting Started
+![Package Visualizer Hero](media/screenshots/hero.gif)
 
-### Prerequisites
-
-- [VS Code](https://code.visualstudio.com/) `1.85.0` or newer
-- Python installed and accessible (or a virtual environment)
-- A Python project with one of: `requirements.txt`, `pyproject.toml`, `setup.py`, `setup.cfg`, or `Pipfile`
-
-### Installation
-
-1. Open VS Code
-2. Go to **Extensions** (`Ctrl+Shift+X`)
-3. Search for **Python Package Visualizer**
-4. Click **Install**
-
-Or install from the [VS Code Marketplace](#).
+</div>
 
 ---
 
-## 📚 Documentation
+## ✨ Why Python Package Visualizer?
 
-Full documentation is available on the [GitHub Wiki](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki):
+Every Python developer has been there: `pip list --outdated` is noisy, `requirements.txt` gets out of sync, CVEs go unnoticed, unused packages bloat your environment, and dependency conflicts break your builds. **This extension fixes all of that — visually.**
 
-- [Home](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Home) — Overview, features, and quick start
-- [Supported Project Types](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Supported-Project-Types) — All supported dependency file formats
-
----
-
-## 📖 How to Use
-
-### Opening the Visualizer
-
-**Option 1 — Activity Bar**
-Click the 📦 icon in the left Activity Bar to open the sidebar, then click **▶ Open Package Visualizer**.
-
-**Option 2 — Command Palette**
-Press `Ctrl+Shift+P` and type `Show Package Visualizer`.
-
-**Option 3 — Command**
-Run `Python Package Visualizer: Show` from the command palette.
+- 🎯 **See everything at a glance** — dashboard, dependency graph, health score
+- 🔒 **Catch vulnerabilities early** — CVE badges pulled from PyPI advisory DB
+- 🧹 **Clean up bloat** — find packages that aren't imported anywhere
+- ⚡ **Update safely** — Safe Mode blocks major-version jumps
+- 📸 **Rollback confidently** — environment snapshots & update history
 
 ---
 
-### Package List Tab
+## 🎬 Demo
 
-The main view shows all packages found in your requirements files.
+<div align="center">
 
-| Column | Description |
+### Package List & Updates
+![Package List Demo](media/screenshots/package-list.gif)
+
+### Import Annotations
+![Import Annotations Demo](media/screenshots/import-annotations.gif)
+
+### Code Insights — Hover & Function Metrics
+![Code Insights Demo](media/screenshots/code-insights.gif)
+
+### Dashboard & Analytics
+![Dashboard](media/screenshots/dashboard.png)
+
+### Dependency Graph
+![Dependency Graph](media/screenshots/dependency-graph.png)
+
+</div>
+
+---
+
+## 🚀 Quick Start
+
+1. Open a Python project containing `requirements.txt`, `pyproject.toml`, or `setup.py`
+2. Click the **📦 icon** in the Activity Bar (left side)
+3. Click **▶ Open Package Visualizer** in the sidebar
+
+That's it. Everything is automatic from there.
+
+---
+
+## 🎯 Core Features
+
+### 📋 Package Management
+| Feature | What it does |
 |---|---|
-| **Package** | Name, source file, group tag, and badges |
-| **Installed** | Currently installed version |
-| **Latest** | Latest version available on PyPI |
-| **Status** | ✅ Up to date / ⚠️ Update available / ⬜ Not installed / 🔴 Vulnerable |
-| **Released** | Release date of the latest version |
-| **Actions** | Update, Rollback, Install, or Remove buttons |
+| **Package List** | Sortable table of all dependencies with installed vs latest versions |
+| **One-click Update** | Update a single package or all at once |
+| **Rollback** | Revert to a previously installed version |
+| **Install New** | Search PyPI and install packages directly |
+| **Pin Versions** | Lock packages to their current version in `requirements.txt` |
+| **Remove Unused** | Delete packages from requirements with one click |
+| **Bulk Actions** | Select multiple packages and update/remove together |
 
-**Sorting:** Click any column header to sort. Click again to reverse.
+### 🧠 Code Intelligence
 
-**Filtering:**
-- Use the search bar to filter by package name or description
-- Use the **All statuses** dropdown to show only specific statuses
-- Use the **All groups** dropdown to filter by group (main, dev, test, docs)
+**Import Annotations** — see package status right above each import line:
+```python
+✅ requests v2.31.0      ↗ PyPI
+import requests
 
-**Inline badges:**
-- `⊘ unused?` — package is not imported anywhere in the project
-- `🔴 CVE` — one or more known vulnerabilities found
+⚠️ flask 2.0.1 → 3.0.3   ↑ Update    ↗ PyPI
+from flask import Flask
+```
 
----
+**Function Metrics** — quality insights above every function:
+```python
+# 📊 18 lines · 🔗 2 refs · ⚡ Low
+def load_resume_text(pdf_path: str) -> str:
+    """Extract text from PDF."""
+    ...
 
-### Actions
+# 📊 25 lines · 🔗 0 refs · ⚡ Moderate
+# ⚠️ Missing type hints (3/3 untyped, no return type) — Click to fix
+# ⚠️ Missing docstring — Click to add
+def create_qa_chain(resume_text):
+    ...
+```
 
-#### Update a Package
-Click **⬆ Update** on any row with an available update. The package is updated via pip and the version pin in your requirements file is synced automatically.
+**Smart Hover Cards** — hover any imported symbol for a compact card:
+```
+📦 langchain · v1.2.15 · MIT
+Building applications with LLMs through composability
+🟢 Up to date · 🐍 >=3.10 · 📅 2 days ago
+↑ Update · 🔍 Inspect · PyPI ↗
+```
 
-#### Rollback a Package
-Click **↩ Rollback** to revert to the previous version. Only available if the package has version history.
+**API Cost Hints** — hover on LLM clients like `ChatGroq`, `ChatOpenAI`:
+```
+🤖 ChatGroq
+Provider: Groq
+💰 Pricing: Free tier · ~$0.05-0.10/1M tokens
+⚡ Speed: Very fast (~300 tok/s)
+```
 
-#### Install a Package
-Click **⬇ Install** on any row with status `Not installed`.
+### 🔒 Security & Compliance
+| Feature | What it does |
+|---|---|
+| **CVE Detection** | Vulnerabilities flagged from PyPI advisory DB |
+| **License Risk** | Classifies MIT/BSD/Apache as safe, GPL/AGPL as restricted |
+| **Safe Mode** 🛡️ | Blocks major-version updates to prevent breaking changes |
+| **Python Compatibility** | Warns when packages require newer Python |
 
-#### Remove from Requirements
-Click **🗑 Remove** on any row marked as `unused?`. This removes the package line from its requirements file after confirmation. The package itself is **not** uninstalled from your environment.
+### 📊 Visualization & Analytics
 
----
+- **Dashboard** — health score, weekly downloads, security stats, maintainer activity
+- **Dependency Graph** — interactive D3.js tree with collapsible nodes
+- **Performance** — ranks packages by install time (Fast/Moderate/Slow)
+- **History** — timeline of all updates, installs, rollbacks
+- **Licenses** — packages grouped by license with risk badges
+- **Snapshots** — save and restore your entire environment
 
-### Add Package
+### 🛠 Power Tools
 
-Click **+ Add Package** in the header to open the install dialog.
+Accessible from the **Export** dropdown in the main panel:
 
-1. Type a package name (e.g. `requests`, `numpy`, `fastapi`)
-2. The dialog instantly shows if the package is **already installed**
-3. Click **Search** to look up the package on PyPI
-4. Review the version and description
-5. Click **⬇ Install** to install it
-
----
-
-### Export Report
-
-Click **⬆ Export** in the header and choose a format:
-
-- **📝 Markdown** — a formatted table with status icons and PyPI links, ready to paste into a README or wiki
-- **{}  JSON** — machine-readable data including version, status, release date, and vulnerability count
-
-The report opens in a new editor tab beside the visualizer.
-
----
-
-### Unused Packages Tab
-
-Shows all packages that have **no detected import** in your `.py` files.
-
-The scanner uses static regex-based analysis — it reads every `.py` file in your workspace (excluding `node_modules`, `.venv`, `__pycache__`, etc.) and checks if the package's module name appears in any `import` or `from ... import` statement.
-
-**Known mappings handled:**
-- `opencv-python` → imported as `cv2`
-- `scikit-learn` → imported as `sklearn`
-- `python-dotenv` → imported as `dotenv`
-- `google-generativeai` → imported as `google.generativeai`
-- CLI-only tools (`uvicorn`, `gunicorn`, `black`, etc.) are never flagged as unused
-
-> **Note:** Static analysis may occasionally produce false positives for dynamically imported packages. Use the `unused?` badge as a hint, not a definitive answer.
-
----
-
-### Dependency Graph Tab
-
-An interactive tree showing:
-- **Root** → your direct packages → their sub-dependencies
-
-**Controls:**
-- 🖱️ **Scroll** — zoom in / out
-- 🖱️ **Drag** — pan the canvas
-- 🖱️ **Click node** — expand/collapse sub-dependencies, open package detail
-- **⊡ Fit** button — auto-fit all nodes in view
-- **＋ / －** buttons — zoom in / out
-
-Node colors match the package status:
-- 🟢 Green — up to date
-- 🟠 Orange — update available
-- 🔴 Red — vulnerable
-- ⚪ Grey — unknown
-- Dashed — not installed
+- **📤 Export Report** — Markdown or JSON snapshot of your dependencies
+- **📦 Generate requirements.txt** — auto-scan imports and create `requirements.txt`
+- **🐧 Setup Scripts** — generate Bash / PowerShell / Markdown setup scripts for onboarding
+- **⚡ Migrate to uv** — convert `requirements.txt` → modern `pyproject.toml`
+- **🎭 Migrate to Poetry** — convert to Poetry format
 
 ---
 
-### History Tab
+## ⚙️ Settings Panel
 
-A chronological timeline of every **install, update, and rollback** performed through the extension. Entries are stored per-workspace.
+![Settings Panel](media/screenshots/settings-panel.png)
+
+Every code insight is **toggleable from the sidebar** — no need to dig into VS Code settings.json.
+
+### General Settings
+- 🔘 Import annotations *(inline package badges)*
+- 🔘 Show hover info
+- 🔘 Auto-check on open
+- 🔘 Notify on outdated packages
+- 📋 Update check schedule *(Off / Daily / Weekly / Monthly)*
+
+### Code Insights
+- 🔘 Function metrics *(lines, references, complexity)*
+- 🔘 Method call hover *(package info + API cost)*
+- 🔘 Complexity warnings
+- 🔘 Type hint coverage warnings
+- 🔘 Docstring warnings
 
 ---
 
 ## ⌨️ Keyboard Shortcuts
 
+Inside the Package Visualizer panel:
+
 | Key | Action |
 |---|---|
 | `R` | Refresh packages |
-| `/` or `Ctrl+F` | Focus search bar |
-| `Esc` | Close detail panel / modal |
+| `/` or `Ctrl+F` | Focus the search bar |
+| `U` | Update all outdated packages |
+| `Esc` | Close detail panel |
 
 ---
 
-## ⚙️ Configuration
+## 🎯 What's New in v3.0.0
 
-Open **Settings** (`Ctrl+,`) and search for `pythonPackageVisualizer`:
+- 📝 **Import Annotations** above every import line with Update/Install quick actions
+- 📊 **Function Metrics** (lines, references, complexity) above every `def`
+- 💡 **Quick-fix CodeLens** — click "Missing docstring" to auto-insert a template
+- 🔍 **Clickable References** — click `🔗 X refs` to open VS Code's Find All References panel
+- 🤖 **Smart Hover Cards** — compact, actionable hover UI with health indicators
+- 💰 **API Cost Hints** for LLM client classes (ChatGroq, ChatOpenAI, etc.)
+- 🎨 **Redesigned tabs** — cleaner Dashboard, Performance, History, Unused, Licenses, Snapshots
+- ⚙️ **Full Settings Panel** in the sidebar with 10 toggles
+- 📦 **Environment Snapshots** — save and restore your full dependency state
+- 🛡️ **Safe Mode** — blocks major-version updates to prevent breaking changes
+- ⚡ **Migration Tools** — convert to uv / Poetry with one click
+- 🚀 **Setup Script Generator** — Bash, PowerShell, and Markdown
 
-| Setting | Default | Description |
-|---|---|---|
-| `pythonPackageVisualizer.pythonPath` | `""` | Override the Python executable path |
-| `pythonPackageVisualizer.cacheExpiryMinutes` | `60` | How long PyPI data is cached |
-| `pythonPackageVisualizer.autoCheckOnOpen` | `true` | Auto-scan when a workspace is opened |
-| `pythonPackageVisualizer.notifyOnOutdated` | `true` | Show notification if outdated packages found |
+See the [CHANGELOG](CHANGELOG.md) for the full history.
 
 ---
 
-## 🗂️ Supported Dependency Files
+## 📋 Supported Project Types
 
-| File | Parsed |
+The extension automatically detects and parses:
+
+| File | Notes |
 |---|---|
-| `requirements.txt` | ✅ |
-| `requirements-dev.txt`, `requirements-test.txt`, etc. | ✅ (auto group: dev / test / docs / lint) |
-| `-r base.txt` includes | ✅ (followed recursively) |
-| `pyproject.toml` | ✅ PEP 621 + Poetry (including named groups) |
-| `setup.py` | ✅ `install_requires` + `extras_require` |
-| `setup.cfg` | ✅ `[options]` + `[options.extras_require]` |
-| `Pipfile` | ✅ `[packages]` + `[dev-packages]` |
+| `requirements.txt` | Main pip format |
+| `requirements-dev.txt`, `requirements-test.txt`, `requirements-prod.txt` | Environment-specific |
+| `pyproject.toml` | PEP 517/518/621, Poetry, PDM, Hatch, uv |
+| `setup.py` | Legacy setuptools |
+| `setup.cfg` | Declarative setuptools |
+| `Pipfile` | Pipenv |
 
-→ See [Supported Project Types](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki/Supported-Project-Types) for full details.
-
----
-
-## 🔒 Security (CVE Badges)
-
-Vulnerability data is fetched from the **PyPI JSON API** (`https://pypi.org/pypi/{name}/json`). If a package version has known vulnerabilities, a 🔴 CVE badge is shown inline and full details (CVE ID, description, fixed version) are visible in the package detail panel.
+Virtual environments are auto-detected from: `.venv/`, `venv/`, `env/`, `.env/`.
 
 ---
 
-## 🛠️ Development
+## 🔧 Installation
 
+### From VS Code Marketplace
+1. Open VS Code
+2. Go to **Extensions** (`Ctrl+Shift+X`)
+3. Search **Python Package Visualizer**
+4. Click **Install**
+
+### From VSIX
 ```bash
-# Clone the repo
-git clone https://github.com/Elanchezhiyan-P/python-package-visualizer.git
-cd python-package-visualizer
-
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Watch mode (auto-rebuild on save)
-npm run watch
-```
-
-Then press `F5` in VS Code (with the project folder open) to launch the **Extension Development Host**.
-
----
-
-## 📁 Project Structure
-
-```
-python-package-visualizer/
-├── src/
-│   ├── extension.ts                   # Entry point
-│   ├── commands/
-│   │   └── commandController.ts       # All command & message handlers
-│   ├── modules/
-│   │   ├── packageScanner.ts          # Scans dep files (requirements, pyproject, setup.*, Pipfile)
-│   │   ├── importScanner.ts           # Static import analysis for unused packages
-│   │   └── requirementsSync.ts        # Syncs version pins back to dep files
-│   ├── services/
-│   │   ├── versionChecker.ts          # PyPI API — versions, CVEs, size, license
-│   │   ├── snapshotManager.ts         # Save / restore environment snapshots
-│   │   └── versionHistoryCache.ts     # Per-workspace install history
-│   ├── ui/
-│   │   ├── webviewPanel.ts            # Main editor tab (webview host)
-│   │   ├── sidebarProvider.ts         # Activity Bar sidebar with live stats
-│   │   └── statusBarManager.ts        # Status bar badge
-│   └── utils/
-│       └── logger.ts                  # Scoped logger
-├── media/
-│   ├── icon.svg
-│   ├── icon.png
-│   └── webview/
-│       ├── index.html                 # Webview UI + CSS
-│       └── main.js                    # Webview JS (all tab logic)
-└── package.json
+code --install-extension python-package-visualizer-3.0.0.vsix
 ```
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, issues and feature requests are welcome!
+Issues and pull requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m 'Add my feature'`
-4. Push to the branch: `git push origin feature/my-feature`
-5. Open a Pull Request
+- 🐛 **Bug reports:** [GitHub Issues](https://github.com/Elanchezhiyan-P/python-package-visualizer/issues)
+- 💡 **Feature requests:** same place — use the `enhancement` label
+- 📖 **Documentation:** [GitHub Wiki](https://github.com/Elanchezhiyan-P/python-package-visualizer/wiki)
 
 ---
 
-## 📄 License
-
-MIT © [Elanchezhiyan P](https://codebyelan.in)
-
----
-
-## 👨‍💻 Author
+## 👤 Author
 
 **Elanchezhiyan P**
 - 🌐 [codebyelan.in](https://codebyelan.in)
@@ -301,4 +249,27 @@ MIT © [Elanchezhiyan P](https://codebyelan.in)
 
 ---
 
-*If you find this extension useful, consider giving it a ⭐ on GitHub!*
+## 📜 License
+
+MIT © [Elanchezhiyan P](https://codebyelan.in). See [LICENSE](LICENSE) for details.
+
+---
+
+## 📸 Screenshots & GIFs
+
+All media is stored in `media/screenshots/`. Current assets:
+
+| File | Type | Used in |
+|---|---|---|
+| `hero.gif` | GIF | Top hero banner |
+| `package-list.gif` | GIF | Demo section — Package List & Updates |
+| `import-annotations.gif` | GIF | Demo section — Import Annotations |
+| `code-insights.gif` | GIF | Demo section — Code Insights |
+| `dashboard.png` | PNG | Demo section — Dashboard |
+| `dependency-graph.png` | PNG | Demo section — Dependency Graph |
+| `settings-panel.png` | PNG | Settings Panel section |
+
+**Recommended tools for recording new GIFs:**
+- 🎞️ [ScreenToGif](https://www.screentogif.com/) *(Windows, free)*
+- 🎞️ [Kap](https://getkap.co/) *(macOS, free)*
+- 🎞️ [LICEcap](https://www.cockos.com/licecap/) *(cross-platform, free)*
