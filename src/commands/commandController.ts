@@ -11,6 +11,10 @@ import { SidebarProvider } from '../ui/sidebarProvider.js';
 import { StatusBarManager } from '../ui/statusBarManager.js';
 import { RequirementsSync } from '../modules/requirementsSync.js';
 import { SnapshotManager } from '../services/snapshotManager.js';
+import { RequirementsGenerator } from '../modules/requirementsGenerator.js';
+import { MigrationHelper } from '../modules/migrationHelper.js';
+import { SetupScriptGenerator } from '../modules/setupScriptGenerator.js';
+import { getAlternatives } from '../data/alternativesMap.js';
 import type { PackageDisplayData, ScanStats, HistoryDisplayEntry } from '../ui/webviewPanel.js';
 import type { ScannedPackage } from '../modules/packageScanner.js';
 import type { VersionCheckResult } from '../services/versionChecker.js';
@@ -19,6 +23,9 @@ export class CommandController {
   private readonly importScanner: ImportScanner;
   private readonly reqSync: RequirementsSync;
   private readonly snapshots: SnapshotManager;
+  private readonly reqGen: RequirementsGenerator;
+  private readonly migration: MigrationHelper;
+  private readonly setupGen: SetupScriptGenerator;
   private lastPackages: ScannedPackage[] = [];
   private lastCheckResults: VersionCheckResult[] = [];
 
@@ -35,6 +42,9 @@ export class CommandController {
     this.importScanner = new ImportScanner(logger);
     this.reqSync = new RequirementsSync(logger);
     this.snapshots = new SnapshotManager(context.globalStorageUri.fsPath, logger);
+    this.reqGen = new RequirementsGenerator(logger, this.importScanner, scanner);
+    this.migration = new MigrationHelper(logger, scanner);
+    this.setupGen = new SetupScriptGenerator();
   }
 
   registerAll(): void {
@@ -146,10 +156,19 @@ export class CommandController {
         }
         case 'deleteSnapshot': {
           const root = this.getWorkspaceRoot();
-          if (root) {
-            this.snapshots.deleteSnapshot(root, (msg as { type: string; id: string }).id);
-            void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
-          }
+          if (!root) { break; }
+          const snapId = (msg as { type: string; id: string }).id;
+          const snap = this.snapshots.getSnapshot(root, snapId);
+          const snapName = snap?.name ?? 'this snapshot';
+          const confirmDel = await vscode.window.showWarningMessage(
+            `Delete snapshot "${snapName}"? This cannot be undone.`,
+            { modal: true },
+            'Delete'
+          );
+          if (confirmDel !== 'Delete') { break; }
+          this.snapshots.deleteSnapshot(root, snapId);
+          void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
+          void vscode.window.showInformationMessage(`Snapshot "${snapName}" deleted.`);
           break;
         }
         case 'listSnapshots': {
@@ -157,6 +176,20 @@ export class CommandController {
           if (root) {
             void this.panel.webview?.postMessage({ type: 'snapshots', snapshots: this.snapshots.listSnapshots(root) });
           }
+          break;
+        }
+        case 'generateRequirements':
+          void this.generateRequirements();
+          break;
+        case 'migrateToUv':
+          void this.migrateToUv();
+          break;
+        case 'migrateToPoetry':
+          void this.migrateToPoetry();
+          break;
+        case 'generateSetupScript': {
+          const m = msg as { type: string; format: 'bash' | 'powershell' | 'markdown' };
+          void this.generateSetupScript(m.format);
           break;
         }
       }
@@ -263,10 +296,21 @@ export class CommandController {
         `${unusedPackages.size} possibly unused packages`
       );
 
+      // Calculate dashboard stats
+      const totalSize = checkResults.reduce((sum, r) => sum + (r.installSize ?? 0), 0);
+      const totalDl = checkResults.reduce((sum, r) => sum + (r.weeklyDownloads ?? 0), 0);
+      const vulnPkgs = checkResults.filter(r => r.vulnerabilities && r.vulnerabilities.length > 0).length;
+      const securityScore = checkResults.length > 0 ? ((checkResults.length - vulnPkgs) / checkResults.length) * 100 : 100;
+
       const scanStats: ScanStats = {
         filesScanned: importResult.filesScanned,
         modulesFound: importResult.importedModules.size,
         workspaceRoot: root,
+        totalSize,
+        totalDownloads: totalDl,
+        securityScore,
+        maintainerActivityScore: 75, // placeholder
+        slowestPackages: [],
       };
 
       this.lastPackages = scanned;
@@ -278,6 +322,11 @@ export class CommandController {
       this.scanner.checkConflicts(root).then(conflicts => {
         if (conflicts.length > 0) {
           this.logger.info(`Found ${conflicts.length} dependency conflict(s)`);
+          // Mark conflicting packages
+          const scannedWithConflicts = this.scanner.detectConflicts(scanned, conflicts);
+          this.lastPackages = scannedWithConflicts;
+          // Re-send packages with conflict info
+          this.panel.sendPackages(scannedWithConflicts, checkResults, unusedPackages);
         }
         this.panel.sendConflicts(conflicts);
       }).catch(err => {
@@ -776,6 +825,76 @@ export class CommandController {
     }
   }
 
+  async generateRequirements(): Promise<void> {
+    try {
+      const root = this.getWorkspaceRoot();
+      if (!root) {
+        void vscode.window.showErrorMessage('No workspace folder open.');
+        return;
+      }
+      const target = await this.reqGen.writeFile(root);
+      const doc = await vscode.workspace.openTextDocument(target);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+      void vscode.window.showInformationMessage('\u2705 requirements.txt generated from imports.');
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Failed to generate requirements: ${String(err)}`);
+    }
+  }
+
+  async migrateToUv(): Promise<void> {
+    try {
+      const root = this.getWorkspaceRoot();
+      if (!root) { return; }
+      const choice = await vscode.window.showWarningMessage(
+        'This will create or overwrite pyproject.toml in your project. Continue?',
+        { modal: true },
+        'Migrate to uv'
+      );
+      if (choice !== 'Migrate to uv') { return; }
+      const target = await this.migration.migrateToUv(root);
+      const doc = await vscode.workspace.openTextDocument(target);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+      void vscode.window.showInformationMessage('\u2705 Migrated to uv. Run `uv sync` to install.');
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Migration failed: ${String(err)}`);
+    }
+  }
+
+  async migrateToPoetry(): Promise<void> {
+    try {
+      const root = this.getWorkspaceRoot();
+      if (!root) { return; }
+      const choice = await vscode.window.showWarningMessage(
+        'This will create or overwrite pyproject.toml in your project. Continue?',
+        { modal: true },
+        'Migrate to Poetry'
+      );
+      if (choice !== 'Migrate to Poetry') { return; }
+      const target = await this.migration.migrateToPoetry(root);
+      const doc = await vscode.workspace.openTextDocument(target);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+      void vscode.window.showInformationMessage('\u2705 Migrated to Poetry. Run `poetry install` to install.');
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Migration failed: ${String(err)}`);
+    }
+  }
+
+  async generateSetupScript(format: 'bash' | 'powershell' | 'markdown'): Promise<void> {
+    try {
+      const root = this.getWorkspaceRoot();
+      if (!root) { return; }
+      let content: string;
+      let lang: string;
+      if (format === 'bash')      { content = this.setupGen.generateBash(root, this.lastPackages); lang = 'shellscript'; }
+      else if (format === 'powershell') { content = this.setupGen.generatePowershell(root, this.lastPackages); lang = 'powershell'; }
+      else                         { content = this.setupGen.generateMarkdown(root, this.lastPackages); lang = 'markdown'; }
+      const doc = await vscode.workspace.openTextDocument({ content, language: lang });
+      await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Failed to generate setup script: ${String(err)}`);
+    }
+  }
+
   private buildHistoryEntries(root: string): HistoryDisplayEntry[] {
     const allEntries = this.history.getFullHistory(root);
     return allEntries.map(e => ({
@@ -826,6 +945,7 @@ export class CommandController {
         pythonRequires: result?.pythonRequires ?? '',
         weeklyDownloads: result?.weeklyDownloads ?? 0,
         installSize: result?.installSize,
+        alternatives: getAlternatives(pkg.name),
       };
     });
   }

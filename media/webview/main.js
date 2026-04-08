@@ -12,6 +12,7 @@
   let allConflicts = [];
   let conflictsByPkg = new Map(); // normalized pkg name → ConflictInfo[]
   let activeTab = 'list';
+  let activeEnvironment = 'all'; // 'all' | 'main' | 'dev' | 'test' | 'prod'
   let sortCol = 'status';   // active sort column key
   let sortDir = 'asc';      // 'asc' | 'desc'
   let selectedPackages = new Set(); // Set of package names
@@ -23,6 +24,7 @@
   let vulnBannerDismissed  = false;
   let driftBannerDismissed = false;
   let snapshots = [];            // list of saved snapshots from extension
+  let scanStats = window._scanStats || {}; // dashboard stats from extension
 
   // Pending PyPI search result (for Add Package modal)
   let pendingInstallName = '';
@@ -36,6 +38,8 @@
   const elList         = document.getElementById('view-list');
   const elUnused       = document.getElementById('view-unused');
   const elHistory      = document.getElementById('view-history');
+  const elDashboard    = document.getElementById('view-dashboard');
+  const elPerformance  = document.getElementById('view-performance');
   const elUnusedBody   = document.getElementById('unused-table-body');
   const elUnusedEmpty  = document.getElementById('unused-empty');
   const elTableBody    = document.getElementById('pkg-table-body');
@@ -91,6 +95,7 @@
         allPackages = msg.packages || [];
         if (msg.scanStats) {
           window._scanStats = msg.scanStats;
+          scanStats = msg.scanStats;
         }
         vulnBannerDismissed  = false;
         driftBannerDismissed = false;
@@ -304,11 +309,21 @@
     document.querySelectorAll('.export-item').forEach(item => {
       item.addEventListener('click', e => {
         e.stopPropagation();
+        const action = item.dataset.action;
         const fmt = item.dataset.fmt;
-        if (fmt) {
+        closeExportMenu();
+        if (action) {
+          if (action === 'export-md')        vscode.postMessage({ type: 'exportReport', format: 'markdown' });
+          else if (action === 'export-json') vscode.postMessage({ type: 'exportReport', format: 'json' });
+          else if (action === 'gen-requirements') vscode.postMessage({ type: 'generateRequirements' });
+          else if (action === 'gen-setup-bash')   vscode.postMessage({ type: 'generateSetupScript', format: 'bash' });
+          else if (action === 'gen-setup-ps')     vscode.postMessage({ type: 'generateSetupScript', format: 'powershell' });
+          else if (action === 'gen-setup-md')     vscode.postMessage({ type: 'generateSetupScript', format: 'markdown' });
+          else if (action === 'migrate-uv')       vscode.postMessage({ type: 'migrateToUv' });
+          else if (action === 'migrate-poetry')   vscode.postMessage({ type: 'migrateToPoetry' });
+        } else if (fmt) {
           vscode.postMessage({ type: 'exportReport', format: fmt });
         }
-        closeExportMenu();
       });
     });
   }
@@ -745,6 +760,7 @@
     const query  = elSearch.value.toLowerCase();
     const status = elFilter.value;
     const group  = elFilterGroup ? elFilterGroup.value : 'all';
+    const environment = activeEnvironment;
 
     const filtered = allPackages.filter(pkg => {
       const matchSearch = !query
@@ -752,11 +768,12 @@
         || (pkg.summary || '').toLowerCase().includes(query);
       const matchStatus = status === 'all' || pkg.status === status;
       const matchGroup  = group === 'all' || (pkg.group || 'main') === group;
+      const matchEnvironment = environment === 'all' || (pkg.environment || 'main') === environment;
       const matchVuln   = !filterVuln || (pkg.vulnerabilities && pkg.vulnerabilities.length > 0);
       const normPkg     = pkg.name.toLowerCase().replace(/[-_.]+/g, '-');
       const matchConflict = !filterConflict || conflictsByPkg.has(normPkg);
       const matchDrift    = !filterDrift    || computeDrift([pkg]).length > 0;
-      return matchSearch && matchStatus && matchGroup && matchVuln && matchConflict && matchDrift;
+      return matchSearch && matchStatus && matchGroup && matchEnvironment && matchVuln && matchConflict && matchDrift;
     });
 
     filtered.sort((a, b) => {
@@ -791,49 +808,111 @@
 
   // ── License Compliance ────────────────────────────────────────────────────
   function renderLicenses() {
-    const summaryEl = document.getElementById('license-summary');
-    const groupsEl  = document.getElementById('license-groups');
-    if (!summaryEl || !groupsEl) return;
+    if (!elViewLicenses) return;
 
-    const RISKS = ['restricted', 'caution', 'safe', 'unknown'];
-    const RISK_LABELS = { restricted: '🔴 Restricted (GPL/AGPL)', caution: '⚠️ Caution (LGPL/MPL)', safe: '✅ Permissive', unknown: '❓ Unknown' };
-    const grouped = { restricted: [], caution: [], safe: [], unknown: [] };
+    const riskMap = {
+      low: ['mit', 'bsd-3-clause', 'bsd-2-clause', 'bsd', 'apache-2.0', 'apache 2.0', 'apache', 'isc', 'mpl-2.0', 'python-2.0', 'python software foundation license', 'psf'],
+      medium: ['lgpl', 'epl', 'cddl', 'eclipse'],
+      high: ['gpl', 'agpl', 'commercial', 'proprietary'],
+    };
 
-    allPackages.forEach(pkg => {
-      const risk = getLicenseRisk(pkg.license);
-      grouped[risk].push(pkg);
+    function classifyLicense(license) {
+      if (!license || license === 'UNKNOWN' || /^see /i.test(license)) return 'unknown';
+      const lower = String(license).toLowerCase();
+      if (riskMap.high.some(k => lower.includes(k))) return 'high';
+      if (riskMap.medium.some(k => lower.includes(k))) return 'medium';
+      if (riskMap.low.some(k => lower.includes(k))) return 'low';
+      return 'unknown';
+    }
+
+    const groups = {};
+    for (const pkg of allPackages) {
+      const license = pkg.license || 'Unknown';
+      if (!groups[license]) {
+        groups[license] = { risk: classifyLicense(license), packages: [] };
+      }
+      groups[license].packages.push(pkg);
+    }
+
+    const riskColor = { low: '#4ade80', medium: '#fb923c', high: '#f87171', unknown: '#94a3b8' };
+    const riskLabel = { low: 'Low Risk', medium: 'Medium Risk', high: 'High Risk', unknown: 'Unknown' };
+
+    const totalCount = allPackages.length;
+    const lowCount = Object.values(groups).filter(g => g.risk === 'low').reduce((s, g) => s + g.packages.length, 0);
+    const medCount = Object.values(groups).filter(g => g.risk === 'medium').reduce((s, g) => s + g.packages.length, 0);
+    const highCount = Object.values(groups).filter(g => g.risk === 'high').reduce((s, g) => s + g.packages.length, 0);
+    const unkCount = Object.values(groups).filter(g => g.risk === 'unknown').reduce((s, g) => s + g.packages.length, 0);
+
+    const sortedGroups = Object.entries(groups).sort((a, b) => {
+      const order = { high: 0, medium: 1, unknown: 2, low: 3 };
+      const diff = order[a[1].risk] - order[b[1].risk];
+      if (diff !== 0) return diff;
+      return b[1].packages.length - a[1].packages.length;
     });
 
-    // Summary cards
-    summaryEl.innerHTML = RISKS.map(r => {
-      const count = grouped[r].length;
-      if (!count) return '';
-      return `<span class="stat-card ${r === 'safe' ? 'ok' : r === 'caution' ? 'update' : r === 'restricted' ? 'vuln' : 'unknown'}">`
-        + `<span class="stat-num">${count}</span><span>${RISK_LABELS[r]}</span></span>`;
+    const summaryCards = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Total</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px;color:var(--vscode-foreground);">${totalCount}</div>
+        </div>
+        <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.3);border-top:3px solid #4ade80;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Low Risk</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px;color:#4ade80;">${lowCount}</div>
+        </div>
+        <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.3);border-top:3px solid #fb923c;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Medium</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px;color:#fb923c;">${medCount}</div>
+        </div>
+        <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-top:3px solid #f87171;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">High Risk</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px;color:#f87171;">${highCount}</div>
+        </div>
+        <div style="background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.3);border-top:3px solid #94a3b8;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Unknown</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px;color:#94a3b8;">${unkCount}</div>
+        </div>
+      </div>
+    `;
+
+    const groupsHtml = sortedGroups.map(([license, group]) => {
+      const color = riskColor[group.risk];
+      const label = riskLabel[group.risk];
+      const pkgListHtml = group.packages.map(p => `
+        <div class="license-pkg-row" data-pkg="${esc(p.name)}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-top:1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);cursor:pointer;">
+          <span style="font-weight:600;font-size:12px;color:var(--vscode-foreground);">${esc(p.name)}</span>
+          <span style="font-family:var(--vscode-editor-font-family,monospace);font-size:10px;color:var(--vscode-descriptionForeground);">${esc(p.installedVersion || '\u2014')}</span>
+        </div>
+      `).join('');
+      return `
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-left:3px solid ${color};border-radius:10px;margin-bottom:16px;overflow:hidden;">
+          <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="min-width:0;">
+              <div style="font-weight:700;font-size:14px;color:var(--vscode-foreground);word-break:break-word;">${esc(license)}</div>
+              <div style="font-size:10px;color:var(--vscode-descriptionForeground);margin-top:2px;">${group.packages.length} package${group.packages.length !== 1 ? 's' : ''}</div>
+            </div>
+            <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:12px;background:${color}22;color:${color};border:1px solid ${color}55;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;">${label}</span>
+          </div>
+          ${pkgListHtml}
+        </div>
+      `;
     }).join('');
 
-    // Grouped lists
-    groupsEl.innerHTML = RISKS.map(r => {
-      const pkgs = grouped[r];
-      if (!pkgs.length) return '';
-      return `<div class="license-group">
-        <div class="license-group-header">
-          <span class="license-risk-badge license-risk-${r}">${RISK_LABELS[r]}</span>
-          <span style="color:var(--vscode-descriptionForeground);font-weight:400">${pkgs.length} package${pkgs.length !== 1 ? 's' : ''}</span>
-        </div>
-        <div class="license-pkg-list">
-          ${pkgs.map(p => `<span class="license-pkg-chip" data-name="${esc(p.name)}">
-            <span class="lpc-name">${esc(p.name)}</span>
-            <span class="lpc-lic">${esc(p.license || 'Unknown')}</span>
-          </span>`).join('')}
-        </div>
-      </div>`;
-    }).join('');
+    const emptyHtml = `<div style="text-align:center;padding:60px 20px;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:10px;color:var(--vscode-descriptionForeground);">No license data available.</div>`;
 
-    // Click chip → open detail panel
-    groupsEl.querySelectorAll('.license-pkg-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const pkg = allPackages.find(p => p.name === chip.dataset.name);
+    elViewLicenses.innerHTML = `
+      <div style="max-width:1000px;margin:0 auto;padding:24px;width:100%;box-sizing:border-box;">
+        <div style="font-size:20px;font-weight:700;color:var(--vscode-foreground);margin-bottom:4px;">License Compliance</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:24px;">Packages grouped by license type and risk level</div>
+        ${summaryCards}
+        ${sortedGroups.length ? groupsHtml : emptyHtml}
+      </div>
+    `;
+
+    // Click package row → open detail panel
+    elViewLicenses.querySelectorAll('.license-pkg-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const pkg = allPackages.find(p => p.name === row.dataset.pkg);
         if (pkg) showDetail(pkg);
       });
     });
@@ -841,38 +920,97 @@
 
   // ── Snapshots ─────────────────────────────────────────────────────────────
   function renderSnapshots() {
-    const listEl  = document.getElementById('snapshots-list');
-    const emptyEl = document.getElementById('snapshots-empty');
-    if (!listEl) return;
+    if (!elViewSnapshots) return;
+    const snaps = snapshots || [];
 
-    if (!snapshots.length) {
-      if (emptyEl) emptyEl.style.display = '';
-      listEl.innerHTML = '';
-      return;
+    const defaultName = `Snapshot ${new Date().toLocaleString()}`;
+    const takeBtn = `
+      <div style="display:flex;gap:8px;align-items:stretch;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px;">
+        <input id="snap-name-input" type="text" placeholder="Snapshot name..." value="${esc(defaultName)}"
+          style="flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-panel-border));border-radius:6px;padding:8px 12px;font-size:12px;font-family:inherit;outline:none;" />
+        <button id="btn-take-snapshot-new" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:8px 18px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">
+          \u{1F4F8} Take Snapshot
+        </button>
+      </div>
+    `;
+
+    let bodyHtml;
+    if (snaps.length === 0) {
+      bodyHtml = `
+        <div style="text-align:center;padding:80px 20px;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:10px;margin-top:24px;">
+          <div style="font-size:42px;margin-bottom:12px;opacity:.5;">\u{1F4F8}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--vscode-foreground);">No snapshots yet</div>
+          <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.5;">Snapshots capture the exact state of your installed packages so you can restore them later. Great before major updates.</div>
+        </div>
+      `;
+    } else {
+      bodyHtml = `<div style="display:grid;gap:12px;margin-top:20px;">` +
+        snaps.map(s => {
+          const date = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
+          const pkgs = s.packages;
+          let count = 0;
+          if (Array.isArray(pkgs)) count = pkgs.length;
+          else if (pkgs && typeof pkgs === 'object') count = Object.keys(pkgs).length;
+          return `
+            <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">
+                <div style="font-size:22px;flex-shrink:0;">\u{1F4F8}</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-weight:600;font-size:13px;color:var(--vscode-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || 'Snapshot')}</div>
+                  <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:4px;">${esc(date)} \u00B7 ${count} package${count !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-shrink:0;">
+                <button class="snap-restore-btn" data-id="${esc(s.id || '')}" style="background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:6px 12px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;">\u21BB Restore</button>
+                <button class="snap-delete-btn" data-id="${esc(s.id || '')}" style="background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3);padding:6px 12px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;">\u{1F5D1} Delete</button>
+              </div>
+            </div>
+          `;
+        }).join('') +
+        `</div>`;
     }
-    if (emptyEl) emptyEl.style.display = 'none';
 
-    listEl.innerHTML = snapshots.map(s => {
-      const pkgCount = Object.keys(s.packages || {}).length;
-      const date = new Date(s.createdAt).toLocaleString();
-      return `<div class="snapshot-card">
-        <span class="snapshot-icon">&#x1F4F8;</span>
-        <div class="snapshot-info">
-          <div class="snapshot-name">${esc(s.name)}</div>
-          <div class="snapshot-meta">${pkgCount} packages &nbsp;·&nbsp; ${esc(date)}</div>
-        </div>
-        <div class="snapshot-actions">
-          <button class="snap-btn snap-restore" data-id="${esc(s.id)}" title="Restore to this snapshot">&#x21A9; Restore</button>
-          <button class="snap-btn danger snap-delete" data-id="${esc(s.id)}" title="Delete snapshot">&#x1F5D1;</button>
-        </div>
-      </div>`;
-    }).join('');
+    elViewSnapshots.innerHTML = `
+      <div style="max-width:900px;margin:0 auto;padding:24px;width:100%;box-sizing:border-box;">
+        <div style="font-size:20px;font-weight:700;color:var(--vscode-foreground);margin-bottom:4px;">Environment Snapshots</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:20px;">Save and restore the exact state of your installed packages</div>
+        ${takeBtn}
+        ${bodyHtml}
+      </div>
+    `;
 
-    listEl.querySelectorAll('.snap-restore').forEach(btn => {
-      btn.addEventListener('click', () => vscode.postMessage({ type: 'restoreSnapshot', id: btn.dataset.id }));
+    // Wire up buttons
+    const newBtn = document.getElementById('btn-take-snapshot-new');
+    const nameInput = document.getElementById('snap-name-input');
+    if (newBtn && nameInput) {
+      const triggerSnapshot = () => {
+        const name = nameInput.value.trim() || `Snapshot ${new Date().toLocaleString()}`;
+        vscode.postMessage({ type: 'takeSnapshot', name });
+      };
+      newBtn.addEventListener('click', triggerSnapshot);
+      nameInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          triggerSnapshot();
+        }
+      });
+    }
+    elViewSnapshots.querySelectorAll('.snap-restore-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if (id) {
+          // Extension side will show the VS Code confirm modal
+          vscode.postMessage({ type: 'restoreSnapshot', id, confirm: true });
+        }
+      });
     });
-    listEl.querySelectorAll('.snap-delete').forEach(btn => {
-      btn.addEventListener('click', () => vscode.postMessage({ type: 'deleteSnapshot', id: btn.dataset.id }));
+    elViewSnapshots.querySelectorAll('.snap-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if (id) {
+          vscode.postMessage({ type: 'deleteSnapshot', id, confirm: true });
+        }
+      });
     });
   }
 
@@ -887,6 +1025,8 @@
     elList.style.display    = 'none';
     elUnused.style.display  = 'none';
     if (elHistory)       elHistory.style.display       = 'none';
+    if (elDashboard)     elDashboard.style.display     = 'none';
+    if (elPerformance)   elPerformance.style.display   = 'none';
     if (elViewLicenses)  elViewLicenses.style.display  = 'none';
     if (elViewSnapshots) elViewSnapshots.style.display = 'none';
 
@@ -900,6 +1040,10 @@
     } else if (tab === 'history') {
       if (elHistory) elHistory.style.display = 'flex';
       renderHistory();
+    } else if (tab === 'dashboard') {
+      if (elDashboard) { elDashboard.style.display = 'flex'; renderDashboard(); }
+    } else if (tab === 'performance') {
+      if (elPerformance) { elPerformance.style.display = 'flex'; renderPerformance(filtered); }
     } else if (tab === 'licenses') {
       if (elViewLicenses) { elViewLicenses.style.display = 'flex'; elViewLicenses.style.flexDirection = 'column'; }
       renderLicenses();
@@ -1234,7 +1378,13 @@
 
     if (!packages.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="7" style="text-align:center;padding:20px;color:var(--vscode-descriptionForeground)">No packages match your filter.</td>`;
+      tr.innerHTML = `<td colspan="8" style="padding:0;border:none;">
+        <div style="text-align:center;padding:60px 20px;margin:16px;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:10px;">
+          <div style="font-size:36px;margin-bottom:10px;opacity:.5;">\u{1F50D}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--vscode-foreground);">No packages match your filter</div>
+          <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px;">Try clearing your search or adjusting filters above.</div>
+        </div>
+      </td>`;
       elTableBody.appendChild(tr);
       return;
     }
@@ -1260,6 +1410,10 @@
       if (sizeClass)   tr.classList.add(sizeClass);
       if (pkg.installSize) tr.title = `Install size: ${(pkg.installSize / 1024 / 1024).toFixed(1)} MB`;
       tr.style.animationDelay = `${i * 18}ms`;
+      // Subtle zebra striping for readability (inline per CSP rules)
+      if (i % 2 === 1) {
+        tr.style.backgroundColor = 'color-mix(in srgb, var(--vscode-foreground) 3%, transparent)';
+      }
 
       const latestDisplay = hasUpdate
         ? `<span class="ver ver-latest" data-copy="${esc(pkg.latestVersion)}" title="Click to copy" style="cursor:pointer">${esc(pkg.latestVersion)}<span class="copy-hint">⧉</span></span>`
@@ -1281,6 +1435,7 @@
             ${groupTag}
             ${hasVuln     ? `<span class="inline-tag cve" title="${pkg.vulnerabilities.length} vulnerabilit${pkg.vulnerabilities.length !== 1 ? 'ies' : 'y'}">&#x1F534; CVE</span>` : ''}
             ${hasConflict ? `<span class="inline-tag conflict" title="${conflictsByPkg.get(normPkgName).length} dependency conflict(s)">&#x26A1; conflict</span>` : ''}
+            ${pkg.pythonWarning ? `<span class="inline-tag" style="background:rgba(220,38,38,.15);color:#dc2626;font-weight:700;" title="${esc(pkg.pythonWarning)}">🔴 Python</span>` : ''}
             ${!pkg.isUsed ? `<span class="inline-tag unused" title="No import found in project">&#x2298; unused?</span>` : ''}
             ${computeDrift([pkg]).length > 0 ? `<span class="inline-tag drift" title="Installed version differs from requirements file">&#x21C4; drift</span>` : ''}
             ${pkg.weeklyDownloads > 0 ? `<span class="pkg-popularity" title="${(pkg.weeklyDownloads||0).toLocaleString()} downloads/week">&#x2193;${formatDownloads(pkg.weeklyDownloads)}/wk</span>` : ''}
@@ -1392,100 +1547,138 @@
 
   // ── Unused Packages Tab ───────────────────────────────────────────────────
   function renderUnused() {
+    if (!elUnused) return;
     const unused = allPackages.filter(p => !p.isUsed);
-    elUnusedBody.innerHTML = '';
-
-    // Show scan diagnostics
-    const statsEl = document.getElementById('scan-stats');
-    if (statsEl) {
-      if (window._scanStats) {
-        const { filesScanned, modulesFound, workspaceRoot } = window._scanStats;
-        const rootShort = workspaceRoot
-          ? workspaceRoot.replace(/\\/g, '/').split('/').slice(-2).join('/')
-          : '?';
-        if (filesScanned === 0) {
-          statsEl.innerHTML =
-            `<span style="color:var(--color-update-available)">` +
-            `&#9888; <strong>0 Python (.py) files found</strong> in <code>${rootShort}</code>. ` +
-            `Make sure the correct Python project folder is open (File &rarr; Open Folder), then Refresh.` +
-            `</span>`;
-        } else {
-          statsEl.innerHTML =
-            `&#128269; Scanned <strong>${filesScanned}</strong> .py file${filesScanned !== 1 ? 's' : ''} ` +
-            `in <code title="${workspaceRoot}">${rootShort}</code> &mdash; ` +
-            `found <strong>${modulesFound}</strong> unique import${modulesFound !== 1 ? 's' : ''}.`;
-        }
-      } else {
-        statsEl.textContent = '';
-      }
-    }
+    const totalScanned = allPackages.length;
+    const stats = window._scanStats || scanStats || {};
+    const filesScanned = stats.filesScanned || 0;
+    const workspaceRoot = stats.workspaceRoot || '';
+    const rootShort = workspaceRoot
+      ? workspaceRoot.replace(/\\/g, '/').split('/').slice(-2).join('/')
+      : '';
 
     // Update tab badge
-    const tab = document.querySelector('.tab[data-tab="unused"]');
-    if (tab) {
-      tab.textContent = unused.length > 0
+    const tabEl = document.querySelector('.tab[data-tab="unused"]');
+    if (tabEl) {
+      tabEl.textContent = unused.length > 0
         ? `Unused Packages (${unused.length})`
         : 'Unused Packages';
     }
 
     if (unused.length === 0) {
-      elUnusedEmpty.style.display = 'block';
+      elUnused.innerHTML = `<div style="max-width:900px;margin:0 auto;padding:24px;width:100%;box-sizing:border-box;">
+        <div style="font-size:20px;font-weight:700;color:var(--vscode-foreground);margin-bottom:4px;">Unused Packages</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:24px;">Packages in your requirements but not imported in any .py file</div>
+        <div style="text-align:center;padding:80px 20px;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:10px;">
+          <div style="font-size:42px;margin-bottom:12px;opacity:.7;">\u2705</div>
+          <div style="font-size:14px;font-weight:600;color:var(--vscode-foreground);">All packages are used!</div>
+          <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px;">Scanned ${filesScanned} file${filesScanned !== 1 ? 's' : ''} across ${totalScanned} package${totalScanned !== 1 ? 's' : ''}${rootShort ? ' in <code>' + esc(rootShort) + '</code>' : ''}</div>
+        </div>
+      </div>`;
       return;
     }
-    elUnusedEmpty.style.display = 'none';
 
-    unused.forEach(pkg => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="padding:5px 10px;border-bottom:1px solid var(--vscode-editorWidget-border,#333);">
-          <strong>${esc(pkg.name)}</strong>
-          ${pkg.summary ? `<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">${esc(pkg.summary)}</div>` : ''}
+    const rowsHtml = unused.map(pkg => {
+      const sourceShort = pkg.source ? String(pkg.source).split(/[\\/]/).pop() : '\u2014';
+      return `
+      <tr class="unused-row" data-pkg="${esc(pkg.name)}" style="border-bottom:1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);">
+        <td style="padding:12px 16px;">
+          <div style="font-weight:600;color:var(--vscode-textLink-foreground);cursor:pointer;" class="pkg-name-link" data-pkg="${esc(pkg.name)}">${esc(pkg.name)}</div>
+          ${pkg.summary ? `<div style="font-size:10px;color:var(--vscode-descriptionForeground);margin-top:3px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pkg.summary)}</div>` : ''}
         </td>
-        <td style="padding:5px 10px;border-bottom:1px solid var(--vscode-editorWidget-border,#333);">
-          ${esc(pkg.installedVersion || '—')}
+        <td style="padding:12px 16px;font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-descriptionForeground);">${esc(pkg.installedVersion || '\u2014')}</td>
+        <td style="padding:12px 16px;font-size:11px;color:var(--vscode-descriptionForeground);" title="${esc(pkg.source || '')}">${esc(sourceShort)}</td>
+        <td style="padding:12px 16px;text-align:right;white-space:nowrap;">
+          <button class="unused-remove-btn" data-name="${esc(pkg.name)}" data-source="${esc(pkg.source || '')}" style="background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3);padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;">\u{1F5D1} Remove</button>
         </td>
-        <td style="padding:5px 10px;border-bottom:1px solid var(--vscode-editorWidget-border,#333);">
-          <span style="font-size:11px;color:var(--vscode-descriptionForeground)">${esc(pkg.source)}</span>
-        </td>
-        <td style="padding:5px 10px;border-bottom:1px solid var(--vscode-editorWidget-border,#333);">
-          <span style="
-            display:inline-flex;align-items:center;gap:4px;
-            padding:2px 8px;border-radius:10px;font-size:11px;
-            background:rgba(158,158,158,.15);color:#9E9E9E;
-          ">&#128683; No imports found</span>
-        </td>
+      </tr>
       `;
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', () => showDetail(pkg));
-      elUnusedBody.appendChild(tr);
+    }).join('');
+
+    elUnused.innerHTML = `
+      <div style="max-width:1000px;margin:0 auto;padding:24px;width:100%;box-sizing:border-box;">
+        <div style="font-size:20px;font-weight:700;color:var(--vscode-foreground);margin-bottom:4px;">Unused Packages</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:20px;">Packages in your requirements files but not imported in any .py file</div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+          <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px 16px;text-align:center;">
+            <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Total Scanned</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:var(--vscode-foreground);">${totalScanned}</div>
+          </div>
+          <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-top:3px solid #fb923c;border-radius:10px;padding:14px 16px;text-align:center;">
+            <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Possibly Unused</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:#fb923c;">${unused.length}</div>
+          </div>
+          <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px 16px;text-align:center;">
+            <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Files Analyzed</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:var(--vscode-foreground);">${filesScanned}</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.3);border-left:3px solid #fb923c;border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:11px;color:var(--vscode-foreground);line-height:1.5;">
+          <strong>\u26A0\uFE0F Heads up:</strong> Some packages may be false positives \u2014 CLI tools (uvicorn, gunicorn, black), runtime plugins, or packages imported dynamically via <code>importlib</code>. Always double-check before removing.
+        </div>
+
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:var(--vscode-editorGroupHeader-tabsBackground);">
+                <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Package</th>
+                <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Version</th>
+                <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Source File</th>
+                <th style="padding:12px 16px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    // Wire up Remove buttons
+    elUnused.querySelectorAll('.unused-remove-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const name = btn.dataset.name;
+        const source = btn.dataset.source;
+        if (name) {
+          vscode.postMessage({ type: 'removeFromRequirements', name, source });
+        }
+      });
+    });
+
+    // Wire up package name links to open detail panel
+    elUnused.querySelectorAll('.pkg-name-link').forEach(el => {
+      el.addEventListener('click', () => {
+        const pkgName = el.dataset.pkg;
+        const pkg = allPackages.find(p => p.name === pkgName);
+        if (pkg) showDetail(pkg);
+      });
     });
   }
 
-  // ── History Tab ───────────────────────────────────────────────────────────
+  // ── History Tab (inline styles — bulletproof) ─────────────────────────────
   function renderHistory() {
-    const listEl = document.getElementById('history-list');
-    const emptyEl = document.getElementById('history-empty');
-    if (!listEl || !emptyEl) return;
+    const elHistoryView = document.getElementById('view-history');
+    if (!elHistoryView) return;
 
-    listEl.innerHTML = '';
+    const wrapStart = `<div style="max-width:820px;margin:0 auto;width:100%;padding:24px;">
+      <div style="font-size:20px;font-weight:700;margin-bottom:4px;color:var(--vscode-foreground);">Update History</div>
+      <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:24px;">Timeline of all package installs, updates, and rollbacks</div>`;
+    const wrapEnd = `</div>`;
 
     if (!historyEntries || historyEntries.length === 0) {
-      emptyEl.style.display = 'block';
-      listEl.style.display = 'none';
+      elHistoryView.innerHTML = wrapStart + `
+        <div style="text-align:center;padding:80px 20px;color:var(--vscode-descriptionForeground);background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:8px;">
+          <div style="font-size:42px;margin-bottom:12px;opacity:.5;">&#x1F553;</div>
+          <div style="font-size:14px;font-weight:600;color:var(--vscode-foreground);">No history yet</div>
+          <div style="font-size:11px;margin-top:6px;">Package updates and rollbacks will appear here.</div>
+        </div>
+      ` + wrapEnd;
       return;
     }
 
-    emptyEl.style.display = 'none';
-    listEl.style.display = 'block';
-
-    const actionLabels = {
-      'pip-install':  'Updated / Installed',
-      'detected':     'Detected',
-      'pip-rollback': 'Rolled back',
-    };
-
-    // ── Date grouping ──────────────────────────────────────────────────────
-    const now       = new Date();
+    const now              = new Date();
     const startOfToday     = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfYesterday = new Date(startOfToday); startOfYesterday.setDate(startOfToday.getDate() - 1);
     const startOfWeek      = new Date(startOfToday); startOfWeek.setDate(startOfToday.getDate() - 7);
@@ -1500,6 +1693,12 @@
       } catch { return 'Earlier'; }
     }
 
+    const actionMeta = {
+      'pip-install':  { label: 'Installed / Updated', icon: '&#x2B07;',  color: '#4ade80' },
+      'pip-rollback': { label: 'Rolled back',         icon: '&#x21A9;',  color: '#60a5fa' },
+      'detected':     { label: 'Detected',            icon: '&#x1F4CC;', color: '#94a3b8' },
+    };
+
     const groupOrder = ['Today', 'Yesterday', 'This Week', 'Earlier'];
     const groups = {};
     for (const entry of historyEntries) {
@@ -1508,43 +1707,200 @@
       groups[g].push(entry);
     }
 
+    let html = wrapStart;
     for (const groupName of groupOrder) {
       if (!groups[groupName]) continue;
-
-      // Group header
-      const header = document.createElement('div');
-      header.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vscode-descriptionForeground);padding:10px 0 4px;opacity:.7;';
-      header.textContent = groupName;
-      listEl.appendChild(header);
+      html += `<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vscode-descriptionForeground);padding:14px 0 8px;opacity:.7;">${groupName}</div>`;
+      html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">`;
 
       for (const entry of groups[groupName]) {
-        const div = document.createElement('div');
-        div.className = 'history-entry';
-
-        const dotClass = entry.source === 'pip-install'
-          ? 'pip-install'
-          : entry.source === 'pip-rollback' ? 'pip-rollback' : 'detected';
-
+        const meta = actionMeta[entry.source] || actionMeta.detected;
         let timeStr = '';
-        try { timeStr = new Date(entry.installedAt).toLocaleString(); }
-        catch { timeStr = entry.installedAt || ''; }
+        try { timeStr = new Date(entry.installedAt).toLocaleString(); } catch { timeStr = entry.installedAt || ''; }
 
-        const actionLabel = actionLabels[entry.source] || entry.source;
-
-        div.innerHTML = `
-          <div class="history-dot ${dotClass}"></div>
-          <div style="flex:1">
-            <div>
-              <span class="history-action">${esc(entry.packageName)}</span>
-              <span style="color:var(--vscode-descriptionForeground);margin-left:6px;font-size:11px;">${esc(actionLabel)}</span>
-              <span style="margin-left:6px;font-family:monospace;font-size:11px;background:var(--vscode-badge-background);padding:1px 5px;border-radius:3px;">${esc(entry.version)}</span>
+        html += `
+          <div style="display:flex;gap:12px;padding:12px 14px;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-left:3px solid ${meta.color};border-radius:0 8px 8px 0;">
+            <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;background:${meta.color}22;color:${meta.color};">${meta.icon}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-weight:600;font-size:13px;color:var(--vscode-foreground);">${esc(entry.packageName)}</span>
+                <span style="font-size:11px;color:var(--vscode-descriptionForeground);">${meta.label} to</span>
+                <code style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:2px 7px;border-radius:4px;">${esc(entry.version)}</code>
+              </div>
+              <div style="font-size:10.5px;color:var(--vscode-descriptionForeground);margin-top:4px;">${esc(timeStr)}</div>
             </div>
-            <div class="history-time">${esc(timeStr)}</div>
           </div>
         `;
-        listEl.appendChild(div);
       }
+      html += `</div>`;
     }
+    html += wrapEnd;
+    elHistoryView.innerHTML = html;
+  }
+
+  // ── Dashboard Tab (inline styles — bulletproof) ────────────────────────────
+  function renderDashboard() {
+    const elDashboardView = document.getElementById('view-dashboard');
+    if (!elDashboardView) return;
+
+    const totalPkgs      = allPackages.length;
+    const withVulns      = allPackages.filter(p => (p.vulnerabilities || []).length > 0).length;
+    const securityScore  = totalPkgs > 0 ? Math.round(((totalPkgs - withVulns) / totalPkgs) * 100) : 100;
+    const totalDownloads = allPackages.reduce((s, p) => s + (p.weeklyDownloads || 0), 0);
+    const totalSizeMB    = allPackages.reduce((s, p) => s + (p.installSize || 0), 0) / (1024 * 1024);
+    const outdated       = allPackages.filter(p => p.status === 'update-available').length;
+
+    const fmtDl = (n) => {
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+      if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+      return String(n);
+    };
+
+    const cards = [
+      { color: '#60a5fa', icon: '&#x1F4E6;', label: 'Total Packages', val: totalPkgs, unit: outdated > 0 ? `${outdated} outdated` : 'all current' },
+      { color: '#a78bfa', icon: '&#x1F4BE;', label: 'Total Size',     val: totalSizeMB.toFixed(1), unit: 'MB' },
+      { color: '#4ade80', icon: '&#x1F4CA;', label: 'Weekly Downloads', val: fmtDl(totalDownloads), unit: 'per week' },
+      { color: '#fb923c', icon: '&#x1F512;', label: 'Security Score', val: securityScore, unit: withVulns === 0 ? '% safe' : `${withVulns} vulnerable` },
+    ];
+
+    const cardHtml = cards.map(c => `
+      <div style="position:relative;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;overflow:hidden;min-height:120px;">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${c.color};"></div>
+        <div style="width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;background:${c.color}22;color:${c.color};">${c.icon}</div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--vscode-descriptionForeground);">${esc(c.label)}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span style="font-size:28px;font-weight:700;color:var(--vscode-foreground);line-height:1;">${esc(String(c.val))}</span>
+          <span style="font-size:12px;color:var(--vscode-descriptionForeground);">${esc(c.unit)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    // Maintainer activity
+    const sixMonthsAgo = Date.now() - (6 * 30 * 24 * 60 * 60 * 1000);
+    const maintainers = allPackages
+      .filter(p => p.releaseDate)
+      .map(pkg => {
+        const released = new Date(pkg.releaseDate).getTime();
+        return { name: pkg.name, date: pkg.releaseDate, active: !isNaN(released) && released > sixMonthsAgo };
+      })
+      .sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0))
+      .slice(0, 20);
+
+    let maintHtml;
+    if (maintainers.length === 0) {
+      maintHtml = `<div style="text-align:center;padding:50px 20px;color:var(--vscode-descriptionForeground);font-size:13px;">No maintainer data available yet.</div>`;
+    } else {
+      maintHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">` +
+        maintainers.map(m => `
+          <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="min-width:0;flex:1;">
+              <div style="font-weight:600;font-size:12.5px;color:var(--vscode-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m.name)}</div>
+              <div style="font-size:10.5px;color:var(--vscode-descriptionForeground);margin-top:2px;">Last release: ${esc(m.date)}</div>
+            </div>
+            <span style="font-size:10px;font-weight:600;padding:4px 10px;border-radius:12px;white-space:nowrap;flex-shrink:0;background:${m.active ? 'rgba(74,222,128,.18)' : 'rgba(148,163,184,.15)'};color:${m.active ? '#4ade80' : '#94a3b8'};border:1px solid ${m.active ? 'rgba(74,222,128,.35)' : 'rgba(148,163,184,.3)'};">
+              ${m.active ? '&#x25CF; Active' : '&#x25CB; Inactive'}
+            </span>
+          </div>
+        `).join('') +
+      `</div>`;
+    }
+
+    elDashboardView.innerHTML = `
+      <div style="max-width:1200px;margin:0 auto;width:100%;padding:24px;">
+        <div style="font-size:20px;font-weight:700;margin-bottom:4px;color:var(--vscode-foreground);">Workspace Dependency Stats</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:24px;">Overview of your Python environment health</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:32px;">${cardHtml}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--vscode-foreground);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--vscode-panel-border);">Package Maintainer Activity</div>
+        ${maintHtml}
+      </div>
+    `;
+  }
+
+  // ── Performance Tab (inline styles — bulletproof) ─────────────────────────
+  function renderPerformance() {
+    const elPerfView = document.getElementById('view-performance');
+    if (!elPerfView) return;
+
+    const tracked = allPackages.filter(p => p.installTime && p.installTime > 0);
+    const fastCount = tracked.filter(p => p.installTime <= 1).length;
+    const modCount  = tracked.filter(p => p.installTime > 1 && p.installTime <= 5).length;
+    const slowCount = tracked.filter(p => p.installTime > 5).length;
+
+    const summaryHtml = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Fast (&lt;1s)</div>
+          <div style="font-size:26px;font-weight:700;margin-top:6px;color:#4ade80;">${fastCount}</div>
+        </div>
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Moderate (1-5s)</div>
+          <div style="font-size:26px;font-weight:700;margin-top:6px;color:#fb923c;">${modCount}</div>
+        </div>
+        <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:10px;text-transform:uppercase;font-weight:600;color:var(--vscode-descriptionForeground);letter-spacing:.5px;">Slow (&gt;5s)</div>
+          <div style="font-size:26px;font-weight:700;margin-top:6px;color:#f87171;">${slowCount}</div>
+        </div>
+      </div>
+    `;
+
+    let bodyHtml;
+    if (tracked.length === 0) {
+      bodyHtml = `
+        <div style="text-align:center;padding:80px 20px;color:var(--vscode-descriptionForeground);background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px dashed var(--vscode-panel-border);border-radius:8px;">
+          <div style="font-size:42px;margin-bottom:12px;opacity:.5;">&#x23F1;&#xFE0F;</div>
+          <div style="font-size:14px;font-weight:600;color:var(--vscode-foreground);">No performance data yet</div>
+          <div style="font-size:11px;margin-top:6px;">Install or update packages to start tracking install times.</div>
+        </div>
+      `;
+    } else {
+      const maxTime = Math.max(...tracked.map(p => p.installTime));
+      const sorted = [...tracked].sort((a, b) => b.installTime - a.installTime).slice(0, 20);
+
+      const rows = sorted.map(pkg => {
+        const time = pkg.installTime;
+        let color = '#4ade80', label = 'Fast';
+        if (time > 5)      { color = '#f87171'; label = 'Slow'; }
+        else if (time > 1) { color = '#fb923c'; label = 'Moderate'; }
+        const widthPct = Math.max(10, (time / maxTime) * 100);
+        const sizeMB = pkg.installSize ? (pkg.installSize / (1024 * 1024)).toFixed(1) : '—';
+        return `
+          <tr style="border-bottom:1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);">
+            <td style="padding:14px 16px;font-weight:600;">${esc(pkg.name)}</td>
+            <td style="padding:14px 16px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:${widthPct}px;height:6px;border-radius:3px;background:${color};min-width:20px;"></div>
+                <span>${time.toFixed(2)}s</span>
+              </div>
+            </td>
+            <td style="padding:14px 16px;"><span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;background:${color}22;color:${color};">${label}</span></td>
+            <td style="padding:14px 16px;text-align:right;color:var(--vscode-descriptionForeground);">${sizeMB}</td>
+          </tr>
+        `;
+      }).join('');
+
+      bodyHtml = `
+        <table style="width:100%;border-collapse:collapse;background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:var(--vscode-editorGroupHeader-tabsBackground);">
+              <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--vscode-descriptionForeground);">Package</th>
+              <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--vscode-descriptionForeground);">Install Time</th>
+              <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--vscode-descriptionForeground);">Speed</th>
+              <th style="padding:12px 16px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--vscode-descriptionForeground);">Size (MB)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    elPerfView.innerHTML = `
+      <div style="max-width:1000px;margin:0 auto;width:100%;padding:24px;">
+        <div style="font-size:20px;font-weight:700;margin-bottom:4px;color:var(--vscode-foreground);">Install Performance</div>
+        <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:24px;">Packages ranked by installation time</div>
+        ${summaryHtml}
+        ${bodyHtml}
+      </div>
+    `;
   }
 
   // ── Detail Panel ──────────────────────────────────────────────────────────
@@ -1613,6 +1969,23 @@
       </div>
     `;
 
+    const alternativesHtml = (pkg.alternatives && pkg.alternatives.length > 0) ? `
+      <div class="field">
+        <label>&#x1F4A1; Alternatives</label>
+        <div style="margin-top:6px;">
+          ${pkg.alternatives.map(a => `
+            <div style="background:var(--vscode-editorWidget-background,var(--vscode-sideBar-background));border:1px solid var(--vscode-panel-border);border-radius:6px;padding:10px 12px;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <strong style="color:var(--vscode-textLink-foreground);font-size:12px;">${esc(a.name)}</strong>
+                ${a.url ? `<span class="alt-link" data-url="${esc(a.url)}" style="font-size:10px;color:var(--vscode-textLink-foreground);cursor:pointer;text-decoration:underline;">&#x2197; Learn more</span>` : ''}
+              </div>
+              <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:4px;">${esc(a.reason)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
     elDetailBody.innerHTML = `
       <div class="field"><label>Status</label><div class="field-value">${statusBadge(pkg.status)}</div></div>
       ${pkg.summary ? `<div class="field"><label>Summary</label><div class="field-value" style="color:var(--vscode-descriptionForeground)">${esc(pkg.summary)}</div></div>` : ''}
@@ -1626,8 +1999,17 @@
       ${pkg.requires && pkg.requires.length ? `<div class="field"><label>Requires (${pkg.requires.length})</label><div class="field-value" style="color:var(--vscode-descriptionForeground);line-height:1.7">${pkg.requires.map(r => `<code>${esc(r)}</code>`).join(' ')}</div></div>` : ''}
       ${conflictsHtml}
       ${vulnHtml}
+      ${alternativesHtml}
       ${history.length ? `<div class="field"><label>Available versions</label><div style="margin-top:6px;line-height:1.8">${versionChips}</div></div>` : ''}
     `;
+
+    // Alternative learn-more links
+    elDetailBody.querySelectorAll('.alt-link').forEach(el => {
+      el.addEventListener('click', () => {
+        const url = el.dataset.url;
+        if (url) vscode.postMessage({ type: 'openUrl', url });
+      });
+    });
 
     // PyPI link in detail panel
     elDetailBody.querySelectorAll('.detail-pypi-link').forEach(el => {

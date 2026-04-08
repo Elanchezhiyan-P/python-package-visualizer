@@ -41,6 +41,8 @@ export interface VersionCheckResult {
   pythonRequires?: string;
   weeklyDownloads?: number;
   installSize?: number;
+  pythonCompatible?: boolean;
+  pythonWarning?: string;
 }
 
 interface PyPIAPIResponse {
@@ -68,6 +70,7 @@ const pypiCache = new Map<string, PyPIPackageInfo>();
 export class VersionChecker {
   private readonly PYPI_BASE = 'https://pypi.org/pypi';
   private readonly CONCURRENCY = 5;
+  private currentPythonVersion: string | null = null;
 
   constructor(
     private readonly logger: Logger,
@@ -107,6 +110,21 @@ export class VersionChecker {
       releaseDate = releases[releases.length - 1].upload_time?.split('T')[0] ?? '';
     }
 
+    // Check Python compatibility
+    const pythonRequires = info.pythonRequires ?? '';
+    let pythonCompatible: boolean | undefined;
+    let pythonWarning: string | undefined;
+
+    if (pythonRequires && installedVersion) {
+      const currentPython = await this.getPythonVersion();
+      if (currentPython) {
+        pythonCompatible = this.checkPythonCompatibility(pythonRequires, currentPython);
+        if (!pythonCompatible) {
+          pythonWarning = `Requires Python ${pythonRequires}, but you have ${currentPython}`;
+        }
+      }
+    }
+
     return {
       packageName,
       installedVersion,
@@ -120,6 +138,8 @@ export class VersionChecker {
       license: info.license ?? '',
       pythonRequires: info.pythonRequires ?? '',
       installSize: info.installSize,
+      pythonCompatible,
+      pythonWarning,
     };
   }
 
@@ -308,5 +328,83 @@ export class VersionChecker {
       }
     }
     return 0;
+  }
+
+  async getPythonVersion(): Promise<string | null> {
+    if (this.currentPythonVersion !== null) {
+      return this.currentPythonVersion;
+    }
+
+    try {
+      const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+      const response = await fetch(`https://api.github.com/repos/python/cpython/releases/latest`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) {
+        return null;
+      }
+
+      // For now, use a hardcoded approach - try to get from pip show python
+      // or return null if unable to detect
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  checkPythonCompatibility(requiresPython: string, currentPython: string): boolean {
+    // Parse version strings: e.g., "3.8", ">=3.8", ">=3.8,<4.0"
+    const parseVersion = (v: string): [number, number] => {
+      const match = v.match(/(\d+)\.(\d+)/);
+      return match ? [parseInt(match[1], 10), parseInt(match[2], 10)] : [0, 0];
+    };
+
+    const [currentMajor, currentMinor] = parseVersion(currentPython);
+    const current = currentMajor * 100 + currentMinor;
+
+    // Parse requirement string
+    const constraints = requiresPython.split(',').map(c => c.trim());
+    for (const constraint of constraints) {
+      // Handle >=X.Y, <=X.Y, ==X.Y, <X.Y, >X.Y, !=X.Y
+      if (constraint.match(/^>=/)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current < required) {
+          return false;
+        }
+      } else if (constraint.match(/^<=/)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current > required) {
+          return false;
+        }
+      } else if (constraint.match(/^==/)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current !== required) {
+          return false;
+        }
+      } else if (constraint.match(/^</)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current >= required) {
+          return false;
+        }
+      } else if (constraint.match(/^>/)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current <= required) {
+          return false;
+        }
+      } else if (constraint.match(/^!=/)) {
+        const [reqMajor, reqMinor] = parseVersion(constraint);
+        const required = reqMajor * 100 + reqMinor;
+        if (current === required) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 }

@@ -23,6 +23,8 @@ export interface ScannedPackage {
   extras: string[];
   requires: string[];
   group: 'main' | 'dev' | 'test' | 'docs' | 'lint' | 'optional';
+  environment: 'main' | 'dev' | 'test' | 'prod';
+  hasConflict?: boolean;
 }
 
 export class PackageScanner {
@@ -122,6 +124,14 @@ export class PackageScanner {
     return 'main';
   }
 
+  private getEnvironmentFromFileName(filename: string): 'main' | 'dev' | 'test' | 'prod' {
+    const name = filename.toLowerCase();
+    if (name.includes('dev')) { return 'dev'; }
+    if (name.includes('test')) { return 'test'; }
+    if (name.includes('prod')) { return 'prod'; }
+    return 'main';
+  }
+
   private parseDepFile(filePath: string): ScannedPackage[] {
     const basename = path.basename(filePath);
     try {
@@ -152,6 +162,8 @@ export class PackageScanner {
     group: 'main' | 'dev' | 'test' | 'docs' | 'lint' | 'optional' = 'main',
     visited = new Set<string>()
   ): ScannedPackage[] {
+    // Determine environment based on filename
+    const environment = this.getEnvironmentFromFileName(path.basename(filePath));
     if (visited.has(filePath)) { return []; }
     visited.add(filePath);
 
@@ -204,6 +216,7 @@ export class PackageScanner {
         extras: match[4] ? match[4].split(',').map(e => e.trim()) : [],
         requires: [],
         group,
+        environment,
       });
     }
 
@@ -230,6 +243,7 @@ export class PackageScanner {
           extras: m[3] ? m[3].slice(1, -1).split(',').map(e => e.trim()) : [],
           requires: [],
           group: 'main',
+          environment: 'main',
         });
       }
     }
@@ -251,6 +265,7 @@ export class PackageScanner {
             extras: m[3] ? m[3].slice(1, -1).split(',').map(e => e.trim()) : [],
             requires: [],
             group: grp,
+            environment: 'main',
           });
         }
       }
@@ -279,6 +294,7 @@ export class PackageScanner {
         extras: [],
         requires: [],
         group: 'main',
+        environment: 'main',
       });
     }
 
@@ -302,6 +318,7 @@ export class PackageScanner {
         extras: [],
         requires: [],
         group: 'dev',
+        environment: 'dev',
       });
     }
 
@@ -314,6 +331,7 @@ export class PackageScanner {
       )?.tool?.poetry?.group ?? {};
     for (const [groupName, groupData] of Object.entries(poetryGroups)) {
       const grp = this.keyToGroup(groupName);
+      const env = this.keyToEnvironment(groupName);
       for (const [pkgName, version] of Object.entries(groupData.dependencies ?? {})) {
         const spec =
           typeof version === 'string'
@@ -327,6 +345,7 @@ export class PackageScanner {
           extras: [],
           requires: [],
           group: grp,
+          environment: env,
         });
       }
     }
@@ -341,6 +360,14 @@ export class PackageScanner {
     if (k.includes('docs') || k.includes('doc')) { return 'docs'; }
     if (k.includes('lint')) { return 'lint'; }
     return 'optional';
+  }
+
+  private keyToEnvironment(key: string): 'main' | 'dev' | 'test' | 'prod' {
+    const k = key.toLowerCase();
+    if (k.includes('dev')) { return 'dev'; }
+    if (k.includes('test')) { return 'test'; }
+    if (k.includes('prod')) { return 'prod'; }
+    return 'main';
   }
 
   private parseSetupPy(filePath: string): ScannedPackage[] {
@@ -364,6 +391,7 @@ export class PackageScanner {
           extras: m[3] ? m[3].slice(1, -1).split(',').map(e => e.trim()) : [],
           requires: [],
           group: 'main',
+          environment: 'main',
         });
       }
     }
@@ -377,6 +405,7 @@ export class PackageScanner {
       while ((sectionM = sectionRe.exec(extrasMatch[1])) !== null) {
         const sectionKey = sectionM[1];
         const grp = this.keyToGroup(sectionKey);
+        const env = this.keyToEnvironment(sectionKey);
         const depEntries = sectionM[2].matchAll(
           /['"]([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)(\[.*?\])?([^'"]*)['"]/g
         );
@@ -389,6 +418,7 @@ export class PackageScanner {
             extras: m[3] ? m[3].slice(1, -1).split(',').map(e => e.trim()) : [],
             requires: [],
             group: grp,
+            environment: env,
           });
         }
       }
@@ -415,15 +445,16 @@ export class PackageScanner {
         const depsValue = this.extractIniKey(body, 'install_requires');
         if (depsValue) {
           for (const dep of this.splitSetupCfgDeps(depsValue)) {
-            const pkg = this.parseSingleDep(dep, 'setup.cfg', 'main');
+            const pkg = this.parseSingleDep(dep, 'setup.cfg', 'main', 'main');
             if (pkg) { results.push(pkg); }
           }
         }
       } else if (sectionName === 'options.extras_require') {
         for (const { key, value } of this.extractIniPairs(body)) {
           const grp = this.keyToGroup(key);
+          const env = this.keyToEnvironment(key);
           for (const dep of this.splitSetupCfgDeps(value)) {
-            const pkg = this.parseSingleDep(dep, 'setup.cfg', grp);
+            const pkg = this.parseSingleDep(dep, 'setup.cfg', grp, env);
             if (pkg) { results.push(pkg); }
           }
         }
@@ -448,7 +479,8 @@ export class PackageScanner {
 
     const processSection = (
       section: Record<string, unknown>,
-      group: 'main' | 'dev'
+      group: 'main' | 'dev',
+      environment: 'main' | 'dev'
     ): void => {
       for (const [pkgName, version] of Object.entries(section)) {
         if (skip.has(pkgName.toLowerCase())) { continue; }
@@ -471,14 +503,15 @@ export class PackageScanner {
           extras,
           requires: [],
           group,
+          environment,
         });
       }
     };
 
     const packages = parsed['packages'] as Record<string, unknown> | undefined;
     const devPackages = parsed['dev-packages'] as Record<string, unknown> | undefined;
-    if (packages) { processSection(packages, 'main'); }
-    if (devPackages) { processSection(devPackages, 'dev'); }
+    if (packages) { processSection(packages, 'main', 'main'); }
+    if (devPackages) { processSection(devPackages, 'dev', 'dev'); }
 
     return results;
   }
@@ -486,7 +519,8 @@ export class PackageScanner {
   private parseSingleDep(
     dep: string,
     source: DepFileType,
-    group: ScannedPackage['group']
+    group: ScannedPackage['group'],
+    environment: ScannedPackage['environment'] = 'main'
   ): ScannedPackage | null {
     const m = dep.match(
       /^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)(\[([^\]]+)\])?(.*)?$/
@@ -500,6 +534,7 @@ export class PackageScanner {
       extras: m[4] ? m[4].split(',').map(e => e.trim()) : [],
       requires: [],
       group,
+      environment,
     };
   }
 
@@ -713,6 +748,23 @@ export class PackageScanner {
   normalizeName(name: string): string {
     // PEP 503 normalization
     return name.toLowerCase().replace(/[-_.]+/g, '-');
+  }
+
+  /**
+   * Detect conflicts from scanned packages by marking packages with conflicts.
+   * Updates the hasConflict field in the packages.
+   */
+  detectConflicts(scanned: ScannedPackage[], conflicts: ConflictInfo[]): ScannedPackage[] {
+    const conflictingPkgs = new Set<string>();
+    for (const conflict of conflicts) {
+      conflictingPkgs.add(this.normalizeName(conflict.package));
+      conflictingPkgs.add(this.normalizeName(conflict.conflictingPackage));
+    }
+
+    return scanned.map(pkg => ({
+      ...pkg,
+      hasConflict: conflictingPkgs.has(this.normalizeName(pkg.name)),
+    }));
   }
 
   /**

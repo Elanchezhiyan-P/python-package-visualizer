@@ -19,6 +19,26 @@ const NAMESPACE_PREFIXES = new Set([
 ]);
 
 /**
+ * Python standard library modules that should never be mapped
+ * to a pip package.
+ */
+const STDLIB_MODULES = new Set([
+  'os','sys','re','json','math','random','time','datetime','collections','itertools',
+  'functools','typing','abc','asyncio','pathlib','io','subprocess','threading',
+  'multiprocessing','queue','socket','urllib','http','email','xml','html','csv',
+  'logging','warnings','copy','pickle','struct','array','bisect','heapq','enum',
+  'string','textwrap','unicodedata','base64','hashlib','hmac','secrets','uuid',
+  'tempfile','shutil','glob','fnmatch','linecache','stat','filecmp','codecs',
+  'argparse','getopt','platform','traceback','gc','inspect','types','dis','ast',
+  'token','keyword','tokenize','operator','contextlib','dataclasses','weakref',
+  'concurrent','sqlite3','zipfile','tarfile','gzip','zlib','bz2','lzma',
+  '__future__','builtins','site','runpy','importlib','pkgutil','zipimport',
+  'configparser','statistics','decimal','fractions','numbers','cmath',
+  'ctypes','mmap','select','signal','errno','os.path','posixpath','ntpath',
+  'shlex','readline','rlcompleter','code','codeop','test','unittest','doctest',
+]);
+
+/**
  * Maps import name (as written in Python) → normalized pip package name.
  * Only entries where the names DIFFER are listed.
  * Keys are lowercase.
@@ -204,6 +224,26 @@ function normalize(name: string): string {
 
 export class ImportScanner {
   constructor(private readonly logger: Logger) {}
+
+  /** Map a Python import module name to its pip package name. Returns null if it's a standard library module. */
+  public mapToPackageName(moduleName: string): string | null {
+    const lower = moduleName.toLowerCase();
+    // Standard library check
+    if (STDLIB_MODULES.has(lower.split('.')[0])) { return null; }
+    // Direct mapping
+    if (IMPORT_TO_PACKAGE[lower]) { return IMPORT_TO_PACKAGE[lower]; }
+    // 2-level for namespace packages
+    const parts = lower.split('.');
+    if (parts.length >= 2) {
+      const twoLevel = parts.slice(0, 2).join('.');
+      if (IMPORT_TO_PACKAGE[twoLevel]) { return IMPORT_TO_PACKAGE[twoLevel]; }
+    }
+    // Top-level fallback
+    const top = parts[0];
+    if (IMPORT_TO_PACKAGE[top]) { return IMPORT_TO_PACKAGE[top]; }
+    // Default: assume top-level matches package name
+    return top;
+  }
 
   async scanImports(workspaceRoot: string): Promise<ImportScanResult> {
     this.logger.info(`Scanning imports in: ${workspaceRoot}`);
