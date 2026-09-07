@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Import Annotations Demo</title>
+  <link rel="stylesheet" href="../../../scripts/screenshots/theme.css">
+  <style>
+    body { background: #1e1e1e; color: #d4d4d4; font-family: Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.6; padding: 24px 0; }
+    .editor { max-width: 780px; margin: 0 auto; background: #1e1e1e; border: 1px solid #3c3c3c; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.45); }
+    .tab-bar { background: #252526; border-bottom: 1px solid #3c3c3c; padding: 8px 12px; font-family: "Segoe UI", sans-serif; font-size: 12px; color: #ccc; display: flex; gap: 8px; align-items: center; }
+    .tab-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: #0e639c; }
+    .code-area { display: flex; min-height: 280px; }
+    .gutter { background: #1e1e1e; color: #858585; text-align: right; padding: 16px 10px; user-select: none; min-width: 36px; border-right: 1px solid #3c3c3c; }
+    .gutter div { height: 22px; }
+    .lines { flex: 1; padding: 16px 18px; font-size: 13.5px; }
+    .codelens { font-family: "Segoe UI", sans-serif; font-size: 11px; color: #999; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .codelens.ok { color: #89d185; }
+    .codelens.warn { color: #cca700; }
+    .codelens .pill { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 3px; padding: 0 5px; font-size: 10px; }
+    .codelens .pill.cve { color: #f87171; border-color: #f87171; }
+    .codelens .link { color: #3794ff; cursor: default; }
+    .codelens .update { color: #fb923c; font-weight: 600; }
+    .kw { color: #569cd6; }
+    .fn { color: #dcdcaa; }
+    .str { color: #ce9178; }
+    .cm { color: #6a9955; }
+    .line { min-height: 22px; }
+    .frame-label { text-align: center; font-family: "Segoe UI", sans-serif; font-size: 11px; color: #888; margin-bottom: 12px; letter-spacing: .04em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div class="frame-label">Import Annotations — inline package badges</div>
+  <div class="editor">
+    <div class="tab-bar"><span class="dot"></span> app.py — Python Package Visualizer demo</div>
+    <div class="code-area">
+      <div class="gutter"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div><div>11</div></div>
+      <div class="lines">
+        <div class="line"><span class="cm"># API routes</span></div>
+        <div class="line">
+          <div class="codelens ok">✅ requests v2.31.0 <span class="pill">PyPI ↗</span></div>
+          <span class="kw">import</span> requests
+        </div>
+        <div class="line"></div>
+        <div class="line">
+          <div class="codelens warn">⚠️ flask 2.0.3 → 3.1.0 <span class="update">↑ Update</span> <span class="link">PyPI ↗</span> <span class="pill cve">CVE</span></div>
+          <span class="kw">from</span> flask <span class="kw">import</span> Flask, jsonify
+        </div>
+        <div class="line"></div>
+        <div class="line">
+          <div class="codelens ok">✅ pydantic v2.10.4 <span class="pill">PyPI ↗</span></div>
+          <span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
+        </div>
+        <div class="line"></div>
+        <div class="line"><span class="kw">app</span> = Flask(__name__)</div>
+        <div class="line"></div>
+        <div class="line"><span class="kw">class</span> <span class="fn">HealthResponse</span>(BaseModel):</div>
+        <div class="line">&nbsp;&nbsp;status: <span class="fn">str</span></div>
+        <div class="line"></div>
+        <div class="line"><span class="kw">def</span> <span class="fn">fetch_pypi</span>(name: <span class="fn">str</span>):</div>
+        <div class="line">&nbsp;&nbsp;<span class="kw">return</span> requests.get(<span class="str">f"https://pypi.org/pypi/{name}/json"</span>)</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,103 @@
+/* ── Performance View ────────────────────────────── */
+#view-performance {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px !important;
+  display: none;
+}
+#view-performance.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.perf-wrap { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.perf-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.perf-sum-card {
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: center;
+}
+.perf-sum-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  letter-spacing: .5px;
+}
+.perf-sum-val {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--vscode-foreground);
+}
+
+#perf-table-v3 {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#perf-table-v3 thead th {
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#perf-table-v3 tbody td {
+  padding: 12px 16px;
+  font-size: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+}
+#perf-table-v3 tbody tr:last-child td { border-bottom: none; }
+#perf-table-v3 tbody tr:hover { background: var(--vscode-list-hoverBackground); }
+
+.perf-bar {
+  display: inline-block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--vscode-focusBorder);
+  min-width: 20px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.perf-bar.fast     { background: #4ade80; }
+.perf-bar.moderate { background: #fb923c; }
+.perf-bar.slow     { background: #f87171; }
+
+.perf-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.perf-pill.fast     { background: rgba(74,222,128,.18); color: #4ade80; }
+.perf-pill.moderate { background: rgba(251,146,60,.18); color: #fb923c; }
+.perf-pill.slow     { background: rgba(248,113,113,.18); color: #f87171; }
+
+.perf-empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 8px;
+}
+.perf-empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .5; }
+.perf-empty-text { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); }
+.perf-empty-sub  { font-size: 11px; margin-top: 6px; }

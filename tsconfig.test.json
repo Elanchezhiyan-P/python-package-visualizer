@@ -3,8 +3,10 @@
   "compilerOptions": {
     "outDir": "./out-test",
     "rootDir": ".",
+    "sourceMap": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "types": ["node", "mocha"]
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist", ".vscode-test"]

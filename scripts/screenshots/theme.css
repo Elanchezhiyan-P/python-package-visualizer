@@ -1,0 +1,37 @@
+:root {
+  --vscode-font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #999999;
+  --vscode-editor-background: #1e1e1e;
+  --vscode-sideBar-background: #252526;
+  --vscode-panel-border: #3c3c3c;
+  --vscode-button-background: #0e639c;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #1177bb;
+  --vscode-input-background: #3c3c3c;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-focusBorder: #007fd4;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #094771;
+  --vscode-editorWidget-background: #252526;
+  --vscode-badge-background: #4d4d4d;
+  --vscode-badge-foreground: #ffffff;
+  --vscode-activityBar-background: #333333;
+  --vscode-titleBar-activeBackground: #3c3c3c;
+  --vscode-scrollbarSlider-background: rgba(121, 121, 121, 0.4);
+  --vscode-textLink-foreground: #3794ff;
+  --vscode-textLink-activeForeground: #3794ff;
+  --vscode-errorForeground: #f48771;
+  --vscode-charts-green: #4ade80;
+  --vscode-charts-orange: #fb923c;
+  --vscode-charts-red: #f87171;
+  --vscode-charts-blue: #60a5fa;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+}

@@ -1,0 +1,7 @@
+{
+  "root": true,
+  "rules": {
+    "void-style": ["warn", "omit"],
+    "no-inline-style": "off"
+  }
+}

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Python Package Visualizer</title>
+  <style>:root {
+  --vscode-font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #999999;
+  --vscode-editor-background: #1e1e1e;
+  --vscode-sideBar-background: #252526;
+  --vscode-panel-border: #3c3c3c;
+  --vscode-button-background: #0e639c;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #1177bb;
+  --vscode-input-background: #3c3c3c;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-focusBorder: #007fd4;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #094771;
+  --vscode-editorWidget-background: #252526;
+  --vscode-badge-background: #4d4d4d;
+  --vscode-badge-foreground: #ffffff;
+  --vscode-activityBar-background: #333333;
+  --vscode-titleBar-activeBackground: #3c3c3c;
+  --vscode-scrollbarSlider-background: rgba(121, 121, 121, 0.4);
+  --vscode-textLink-foreground: #3794ff;
+  --vscode-textLink-activeForeground: #3794ff;
+  --vscode-errorForeground: #f48771;
+  --vscode-charts-green: #4ade80;
+  --vscode-charts-orange: #fb923c;
+  --vscode-charts-red: #f87171;
+  --vscode-charts-blue: #60a5fa;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+}
+</style>
+  <link rel="stylesheet" href="../../webview/css/base.css">
+  <link rel="stylesheet" href="../../webview/css/layout.css">
+  <link rel="stylesheet" href="../../webview/css/components.css">
+  <link rel="stylesheet" href="../../webview/css/components/loader.css">
+  <link rel="stylesheet" href="../../webview/css/components/empty-state.css">
+  <link rel="stylesheet" href="../../webview/css/components/tour.css">
+  <link rel="stylesheet" href="../../webview/css/components/modal.css">
+  <link rel="stylesheet" href="../../webview/css/components/export-menu.css">
+  <link rel="stylesheet" href="../../webview/css/list-view.css">
+  <link rel="stylesheet" href="../../webview/css/detail-view.css">
+  <link rel="stylesheet" href="../../webview/css/graph-view.css">
+  <link rel="stylesheet" href="../../webview/css/tabs-view.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/dashboard.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/unused.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/licenses.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/snapshots.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/performance.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/history.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/conflicts.css">
+  <link rel="stylesheet" href="../../webview/css/tabs/venv-health.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div id="header">
+    <div id="header-left">
+      <div id="header-icon">&#x1F4E6;</div>
+      <div>
+        <div id="header-h1">Python Package Visualizer</div>
+        <div id="header-sub">Workspace dependency manager</div>
+      </div>
+    </div>
+    <div id="header-actions">
+      <button type="button" id="btn-add-pkg" class="hdr-btn" title="Install a new package">&#xFF0B; Add Package</button>
+      <div id="export-wrap">
+        <button type="button" id="btn-export" class="hdr-btn" title="Project tools">
+          🛠 Tools <span class="chevron">&#x25BE;</span>
+        </button>
+        <div id="export-menu">
+          <div class="export-section-label" data-i18n="export.reportLabel" style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Export Report</div>
+          <div class="export-item" data-action="export-md">&#x1F4DD; Markdown</div>
+          <div class="export-item" data-action="export-json">&#x7B;&#x7D; JSON</div>
+          <div style="height:1px;background:var(--vscode-panel-border);margin:4px 0;"></div>
+          <div class="export-section-label" data-i18n="export.generateLabel" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Generate</div>
+          <div class="export-item" data-action="gen-requirements">&#x1F4E6; requirements.txt from imports</div>
+          <div class="export-item" data-action="gen-setup-bash">&#x1F427; Setup script (Bash)</div>
+          <div class="export-item" data-action="gen-setup-ps">&#x1FA9F; Setup script (PowerShell)</div>
+          <div class="export-item" data-action="gen-setup-md">&#x1F4D6; Setup README (Markdown)</div>
+          <div style="height:1px;background:var(--vscode-panel-border);margin:4px 0;"></div>
+          <div class="export-section-label" data-i18n="export.migrateLabel" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Migrate</div>
+          <div class="export-item" data-action="migrate-uv-manual">&#x26A1; Migrate to uv (manual)</div>
+          <div class="export-item" data-action="migrate-uv-auto">&#x26A1; Migrate to uv (automatic)</div>
+          <div class="export-item" data-action="migrate-poetry">&#x1F3AD; Migrate to Poetry</div>
+        </div>
+      </div>
+      <button type="button" id="btn-refresh" class="hdr-btn" title="Re-scan workspace">
+        &#x21BB; Refresh
+      </button>
+      <select id="lang-select" class="toolbar-select" title="Language" style="min-width:auto;padding:4px 8px;font-size:11px;">
+        <option value="en">🌐 EN</option>
+        <option value="it">🌐 IT</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div id="search-wrap">
+      <span id="search-icon">&#x1F50D;</span>
+      <input id="search" type="text" placeholder="Search packages, summaries…" autocomplete="off" spellcheck="false">
+    </div>
+    <select id="filter-status" class="toolbar-select">
+      <option value="all">All statuses</option>
+      <option value="update-available">Updates available</option>
+      <option value="up-to-date">Up to date</option>
+      <option value="drift">Disaligned</option>
+      <option value="unknown">Unknown</option>
+      <option value="not-installed">Not installed</option>
+    </select>
+    <select id="filter-group" class="toolbar-select">
+      <option value="all">All groups</option>
+      <option value="main">Main</option>
+      <option value="dev">Dev</option>
+      <option value="test">Test</option>
+      <option value="docs">Docs</option>
+      <option value="lint">Lint</option>
+      <option value="optional">Optional</option>
+    </select>
+    <button type="button" id="btn-safe-mode" title="Safe Mode: block major-version updates">🛡 Safe Mode</button>
+  </div>
+
+  <!-- Stats Bar -->
+  <div id="stats-bar">
+    <span class="stat-card ok clickable" id="stat-ok-card" data-filter="up-to-date">
+      <span>✅</span>
+      <span class="stat-num" id="stat-ok">0</span>
+      <span>up to date</span>
+    </span>
+    <span class="stat-card update clickable" id="stat-update-card" data-filter="update-available">
+      <span>⬆️</span>
+      <span class="stat-num" id="stat-update">0</span>
+      <span>updates available</span>
+    </span>
+    <span class="stat-card drift clickable" id="stat-drift-card" data-filter="drift">
+      <span>⚠️</span>
+      <span class="stat-num" id="stat-drift">0</span>
+      <span>disaligned</span>
+    </span>
+    <span class="stat-card unknown clickable" id="stat-unknown-card" data-filter="unknown">
+      <span>❓</span>
+      <span class="stat-num" id="stat-unknown">0</span>
+      <span>unknown</span>
+    </span>
+    <span class="stat-card vuln clickable" id="stat-vuln-card" data-filter="vuln" style="display:none">
+      <span>&#x1F534;</span>
+      <span class="stat-num" id="stat-vuln">0</span>
+      <span>vulnerable</span>
+    </span>
+    <span class="stat-card stale clickable" id="stat-stale-card" data-filter="stale" style="display:none">
+      <span>&#x1F570;&#xFE0F;</span>
+      <span class="stat-num" id="stat-stale">0</span>
+      <span>Stale</span>
+    </span>
+    <span class="stat-card conflict clickable" id="stat-conflict-card" data-filter="conflict" style="display:none">
+      <span>&#x26A1;</span>
+      <span class="stat-num" id="stat-conflict">0</span>
+      <span>conflicts</span>
+    </span>
+    <span class="stat-card unknown" id="stat-groups-card" style="display:none; font-size:10px; padding:4px 10px;">
+      <span id="stat-groups-text"></span>
+    </span>
+  </div>
+
+  <!-- Tab Bar -->
+  <div id="tab-bar">
+    <div class="tab" data-tab="dashboard">Dashboard</div>
+    <div class="tab active" data-tab="list">Package List</div>
+    <div class="tab" data-tab="venv-health">Environment</div>
+    <div class="tab" data-tab="conflicts">Conflicts</div>
+    <div class="tab" data-tab="unused">Unused Packages</div>
+    <div class="tab" data-tab="graph">Dependency Graph</div>
+    <div class="tab" data-tab="performance">Performance</div>
+    <div class="tab" data-tab="history">History</div>
+    <div class="tab" data-tab="licenses">Licenses</div>
+    <div class="tab" data-tab="snapshots">Snapshots</div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Loading -->
+    <div id="loading">
+      <div class="loader"></div>
+      <span id="loading-msg">Scanning workspace…</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state">
+      <div class="empty-icon">&#x1F4E6;</div>
+      <div class="empty-title">No Python packages found</div>
+      <p>This workspace doesn't contain any recognized dependency file.</p>
+      <div class="empty-files">
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>requirements.txt</code>
+            <span class="empty-file-desc">Standard pip dependency file</span>
+          </div>
+        </div>
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>pyproject.toml</code>
+            <span class="empty-file-desc">Modern Python project config (Poetry, Hatch)</span>
+          </div>
+        </div>
+        <div class="empty-file-item">
+          <span class="empty-file-icon">&#x1F4C4;</span>
+          <div>
+            <code>setup.py</code>
+            <span class="empty-file-desc">Legacy setuptools config</span>
+          </div>
+        </div>
+      </div>
+      <div class="empty-actions">
+        <button class="empty-btn" id="empty-select-manual" type="button">Select requirements file…</button>
+        <button class="empty-btn empty-btn-secondary" id="empty-refresh" type="button">&#x21BB; Refresh</button>
+      </div>
+    </div>
+
+    <!-- Dependency Graph -->
+    <div id="view-graph">
+      <div id="graph-toolbar">
+        <span id="graph-toolbar-hint">Scroll to zoom &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Click node for details &nbsp;·&nbsp; Double-click or orange dot to expand</span>
+        <button type="button" class="graph-btn" id="graph-fit">⊡ Fit</button>
+        <button type="button" class="graph-btn" id="graph-zoom-in">＋</button>
+        <button type="button" class="graph-btn" id="graph-zoom-out">－</button>
+      </div>
+      <div id="graph-canvas"></div>
+    </div>
+
+    <!-- Unused Packages -->
+    <div id="view-unused">
+      <div id="scan-stats"></div>
+      <div id="unused-banner">
+        <strong>⚠️ Note:</strong>
+        Detection uses static <code>import</code> analysis of <code>.py</code> files.
+        CLI tools (uvicorn, gunicorn, black…), runtime deps (python-multipart…) and
+        namespace packages (google.*, azure.*) are <strong>excluded automatically</strong>.
+        Packages loaded via <code>importlib</code>, entry-point plugins, or conditional
+        imports may still appear — always verify before removing.
+      </div>
+      <table style="margin-top:10px">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Installed</th>
+            <th>Source</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="unused-table-body"></tbody>
+      </table>
+      <div id="unused-empty">
+        <div class="empty-icon">✅</div>
+        <p>All declared packages appear to be imported somewhere in this project.</p>
+      </div>
+    </div>
+
+    <!-- Bulk Action Bar -->
+    <div id="bulk-bar">
+      <span id="bulk-count">0 selected</span>
+      <button type="button" class="bulk-btn" id="bulk-update">↑ Update Selected</button>
+      <button type="button" class="bulk-btn" id="bulk-sync">🔗 Align Selected</button>
+      <button type="button" class="bulk-btn danger" id="bulk-deselect">✕ Deselect All</button>
+    </div>
+
+    <!-- Package List -->
+    <div id="view-list">
+      <div id="vuln-banner" class="alert-banner">
+        <span class="alert-banner-msg">&#x1F534; <strong id="vuln-banner-count">0</strong> package(s) have known security vulnerabilities</span>
+        <button type="button" class="alert-banner-action" id="vuln-banner-jump">View affected</button>
+        <button type="button" class="alert-banner-dismiss" id="vuln-banner-dismiss" title="Dismiss">&times;</button>
+      </div>
+      <div id="drift-banner" class="alert-banner">
+        <span class="alert-banner-msg">⚠️ <strong id="drift-banner-count">0</strong> package(s) installed version differs from requirements file</span>
+        <button type="button" class="alert-banner-action" id="drift-banner-view">View drift</button>
+        <button type="button" class="alert-banner-dismiss" id="drift-banner-dismiss" title="Dismiss">&times;</button>
+      </div>
+      <div id="result-count"></div>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-check"><input type="checkbox" id="check-all" title="Select all"></th>
+            <th data-col="name" class="sorted sort-asc">
+              <span class="th-inner">
+                Package
+                <span class="sort-icon" id="si-name">▲</span>
+              </span>
+            </th>
+            <th data-col="required">
+              <span class="th-inner">
+                Required
+                <span class="sort-icon" id="si-required">⬍</span>
+              </span>
+            </th>
+            <th data-col="installed">
+              <span class="th-inner">
+                Installed
+                <span class="sort-icon" id="si-installed">⬍</span>
+              </span>
+            </th>
+            <th data-col="latest">
+              <span class="th-inner">
+                Latest
+                <span class="sort-icon" id="si-latest">⬍</span>
+              </span>
+            </th>
+            <th data-col="status">
+              <span class="th-inner">
+                Status
+                <span class="sort-icon" id="si-status">&#x2B0D;</span>
+              </span>
+            </th>
+            <th data-col="released">
+              <span class="th-inner">
+                Released
+                <span class="sort-icon" id="si-released">&#x2B0D;</span>
+              </span>
+            </th>
+            <th class="col-health">
+              <span class="th-inner" style="cursor:default" title="Health score based on update status, vulnerabilities and release age">Health</span>
+            </th>
+            <th>
+              <span class="th-inner" style="cursor:default">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="pkg-table-body"></tbody>
+      </table>
+    </div>
+
+    <!-- History View -->
+    <div id="view-history" style="display:none; flex:1; overflow-y:auto; padding:18px;">
+      <div style="max-width:800px;">
+        <div style="margin-bottom:18px;">
+          <h2 style="font-size:16px; font-weight:700;">Update History</h2>
+          <p style="font-size:12px; color:var(--vscode-descriptionForeground); margin-top:4px;">
+            All package updates, rollbacks, and installations
+          </p>
+        </div>
+
+        <div id="history-list" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Populated by JS with timeline items -->
+        </div>
+
+        <div id="history-empty" style="
+          text-align: center;
+          padding: 60px 20px;
+          color: var(--vscode-descriptionForeground);
+        ">
+          🕐 No update history yet. Your updates and rollbacks will appear here.
+        </div>
+      </div>
+    </div>
+
+    <!-- License Compliance View -->
+    <div id="view-licenses" style="display:none">
+      <div class="license-summary" id="license-summary"></div>
+      <div id="license-groups"></div>
+    </div>
+
+    <!-- Snapshots View -->
+    <div id="view-snapshots" style="display:none">
+      <div id="snapshots-header">
+        <h3>&#x1F4F8; Environment Snapshots</h3>
+        <button type="button" id="btn-take-snapshot">&#x2795; Take Snapshot</button>
+      </div>
+      <div id="snapshots-empty" style="display:none">
+        <p>No snapshots yet. Take a snapshot to save the current installed state of all packages.</p>
+      </div>
+      <div id="snapshots-list"></div>
+    </div>
+
+    <!-- Conflicts View -->
+    <div id="view-conflicts" style="display:none; flex:1; overflow-y:auto;"></div>
+
+    <!-- Venv Health View -->
+    <div id="view-venv-health" style="display:none; flex:1; overflow-y:auto;"></div>
+
+    <!-- Dashboard View -->
+    <div id="view-dashboard" style="display:none; flex:1; overflow-y:auto;">
+      <div class="dash-wrap">
+        <div class="dash-title">Workspace Dependency Stats</div>
+        <div class="dash-subtitle">Overview of your Python environment health</div>
+
+        <div class="dash-grid" id="dashboard-grid"></div>
+
+        <div class="dash-section-title">Package Maintainer Activity</div>
+        <div class="maintainer-grid" id="maintainer-list"></div>
+        <div class="maint-empty" id="maintainer-empty" style="display:none;">
+          No maintainer data available yet.
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance View -->
+    <div id="view-performance" style="display:none; flex:1; overflow-y:auto;">
+      <div class="perf-wrap">
+        <div class="dash-title">Install Performance</div>
+        <div class="dash-subtitle">Packages ranked by installation time</div>
+
+        <div class="perf-summary" id="perf-summary"></div>
+
+        <table id="perf-table-v3">
+          <thead>
+            <tr>
+              <th style="width:40%;">Package</th>
+              <th style="width:25%;">Install Time</th>
+              <th style="width:20%;">Speed</th>
+              <th style="width:15%; text-align:right;">Size (MB)</th>
+            </tr>
+          </thead>
+          <tbody id="perf-tbody"></tbody>
+        </table>
+
+        <div class="perf-empty" id="perf-empty" style="display:none;">
+          <div class="perf-empty-icon">&#x23F1;&#xFE0F;</div>
+          <div class="perf-empty-text">No performance data yet</div>
+          <div class="perf-empty-sub">Update or install packages to start tracking install times.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Add Package Modal -->
+  <div id="add-pkg-modal">
+    <div id="add-pkg-dialog">
+      <div id="add-pkg-header">
+        <div id="add-pkg-header-icon">&#x1F4E6;</div>
+        <div id="add-pkg-header-text">
+          <h2>Install New Package</h2>
+          <p>Search PyPI and install into your environment</p>
+        </div>
+        <button type="button" id="add-pkg-close" title="Close">&times;</button>
+      </div>
+      <div id="add-pkg-body">
+        <div id="add-pkg-search-row">
+          <input id="add-pkg-input" type="text"
+            placeholder="e.g. requests, numpy, fastapi…"
+            autocomplete="off" spellcheck="false">
+          <button type="button" id="add-pkg-search">Search</button>
+        </div>
+        <div id="add-pkg-result">
+          <span>Type a package name and press <strong>Search</strong> or Enter.</span>
+        </div>
+      </div>
+      <div id="add-pkg-footer">
+        <button type="button" id="add-pkg-cancel">Cancel</button>
+        <button type="button" id="add-pkg-install" disabled>&#x2B07; Install</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Copy Toast -->
+  <div id="copy-toast">✓ Copied to clipboard</div>
+
+  <!-- Welcome Tour -->
+  <div id="tour-backdrop"></div>
+  <div id="tour-tooltip">
+    <div id="tour-step-label"></div>
+    <div id="tour-title"></div>
+    <div id="tour-text"></div>
+    <div id="tour-actions">
+      <button type="button" id="tour-skip">Skip tour</button>
+      <button type="button" id="tour-next">Next →</button>
+    </div>
+  </div>
+
+  <!-- Overlay -->
+  <div id="overlay"></div>
+
+  <!-- Detail Panel -->
+  <div id="detail-panel">
+    <div id="detail-header">
+      <span id="detail-name">Package</span>
+      <button type="button" id="detail-close" title="Close">&times;</button>
+    </div>
+    <div id="detail-body"></div>
+  </div>
+
+  
+<script>
+  window.acquireVsCodeApi = function () {
+    return { postMessage: function () {}, getState: function () { return null; }, setState: function () {} };
+  };
+  window.startTour = function () {};
+</script>
+<script src="../../webview/vendor/d3.v7.min.js"></script>
+  <script src="../../webview/js/state.js"></script>
+  <script src="../../webview/js/i18n/en.js"></script>
+  <script src="../../webview/js/i18n/it.js"></script>
+  <script src="../../webview/js/i18n.js"></script>
+  <script src="../../webview/js/htmlSafety.js"></script>
+  <script src="../../webview/js/versionDisplay.js"></script>
+  <script src="../../webview/js/packageMetrics.js"></script>
+  <script src="../../webview/js/filters.js"></script>
+  <script src="../../webview/js/table/rowBuilder.js"></script>
+  <script src="../../webview/js/table/events.js"></script>
+  <script src="../../webview/js/table/dialogs/unusedRemoveConfirm.js"></script>
+  <script src="../../webview/js/table/dialogs.js"></script>
+  <script src="../../webview/js/table/bulk.js"></script>
+  <script src="../../webview/js/table.js"></script>
+  <script src="../../webview/js/modal.js"></script>
+  <script src="../../webview/js/tour.js"></script>
+  <script src="../../webview/js/graph/treeData.js"></script>
+  <script src="../../webview/js/graph.js"></script>
+  <script src="../../webview/js/tabs/licenses.js"></script>
+  <script src="../../webview/js/tabs/snapshots.js"></script>
+  <script src="../../webview/js/tabs/dashboard.js"></script>
+  <script src="../../webview/js/tabs/performance.js"></script>
+  <script src="../../webview/js/tabs/history.js"></script>
+  <script src="../../webview/js/tabs/unused/confidenceRows.js"></script>
+  <script src="../../webview/js/tabs/unused/unusedBindings.js"></script>
+  <script src="../../webview/js/tabs/unused.js"></script>
+  <script src="../../webview/js/tabs/conflicts.js"></script>
+  <script src="../../webview/js/tabs/venv-health/installedPackagesPanel.js"></script>
+  <script src="../../webview/js/tabs/venv-health.js"></script>
+  <script src="../../webview/js/tabs.js"></script>
+  <script src="../../webview/js/detail.js"></script>
+  <script src="../../webview/main/messageRouter.js"></script>
+  <script src="../../webview/main/domSetup.js"></script>
+  <script src="../../webview/main.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {"type":"init","packages":[{"name":"requests","installedVersion":"2.31.0","latestVersion":"2.32.3","status":"update-available","allVersions":["2.32.3","2.31.0"],"summary":"Python HTTP for Humans.","homePage":"https://requests.readthedocs.io","specifiedVersion":">=2.31.0","source":"requirements.txt","requires":["urllib3","certifi","charset-normalizer","idna"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-05-20","group":"main","license":"Apache-2.0","pythonRequires":">=3.8","weeklyDownloads":52000000,"installSize":450000,"environment":"main"},{"name":"flask","installedVersion":"2.0.3","latestVersion":"3.1.0","status":"update-available","allVersions":["3.1.0","2.0.3"],"summary":"A simple framework for building complex web applications.","homePage":"https://flask.palletsprojects.com","specifiedVersion":"==2.0.3","source":"requirements.txt","requires":["werkzeug","jinja2","click","itsdangerous","blinker"],"isUsed":true,"vulnerabilities":[{"id":"CVE-2023-30861","summary":"Cookie parsing vulnerability","fixedIn":"2.3.2"}],"releaseDate":"2021-05-11","group":"main","license":"BSD-3-Clause","pythonRequires":">=3.8","weeklyDownloads":18000000,"installSize":620000,"environment":"main"},{"name":"langchain","installedVersion":"0.3.14","latestVersion":"0.3.14","status":"up-to-date","allVersions":["0.3.14"],"summary":"Building applications with LLMs through composability.","homePage":"https://python.langchain.com","specifiedVersion":">=0.3.0","source":"requirements.txt","requires":["pydantic","langsmith","tenacity","jsonpatch"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2025-01-08","group":"main","license":"MIT","pythonRequires":">=3.9","weeklyDownloads":4200000,"installSize":8900000,"environment":"main"},{"name":"pandas","installedVersion":"2.2.3","latestVersion":"2.2.3","status":"drift","allVersions":["2.2.3"],"summary":"Powerful data structures for data analysis.","homePage":"https://pandas.pydata.org","specifiedVersion":"==2.1.4","source":"requirements.txt","requires":["numpy","python-dateutil","pytz"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-11-01","group":"main","license":"BSD-3-Clause","pythonRequires":">=3.9","weeklyDownloads":38000000,"installSize":42000000,"environment":"main"},{"name":"pydantic","installedVersion":"2.10.4","latestVersion":"2.10.4","status":"up-to-date","allVersions":["2.10.4"],"summary":"Data validation using Python type hints.","homePage":"https://docs.pydantic.dev","specifiedVersion":">=2.0","source":"requirements.txt","requires":["annotated-types","pydantic-core","typing-extensions"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-12-20","group":"main","license":"MIT","pythonRequires":">=3.8","weeklyDownloads":95000000,"installSize":2100000,"environment":"main"},{"name":"django","installedVersion":"4.2.17","latestVersion":"5.1.4","status":"update-available","allVersions":["5.1.4","4.2.17"],"summary":"A high-level Python web framework.","homePage":"https://www.djangoproject.com","specifiedVersion":"==4.2.17","source":"requirements.txt","requires":["asgiref","sqlparse","tzdata"],"isUsed":false,"unusedConfidence":72,"unusedReasons":["no-imports"],"vulnerabilities":[],"releaseDate":"2024-12-04","group":"main","license":"BSD-3-Clause","pythonRequires":">=3.8","weeklyDownloads":12000000,"installSize":15000000,"environment":"main"},{"name":"pytest","installedVersion":"8.3.4","latestVersion":"8.3.4","status":"up-to-date","allVersions":["8.3.4"],"summary":"pytest: simple powerful testing with Python.","homePage":"https://pytest.org","specifiedVersion":">=8.0","source":"requirements-dev.txt","requires":["iniconfig","packaging","pluggy"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-12-15","group":"dev","license":"MIT","pythonRequires":">=3.8","weeklyDownloads":45000000,"installSize":1800000,"environment":"dev"},{"name":"black","installedVersion":"24.10.0","latestVersion":"24.10.0","status":"up-to-date","allVersions":["24.10.0"],"summary":"The uncompromising code formatter.","homePage":"https://black.readthedocs.io","specifiedVersion":">=24.0","source":"requirements-dev.txt","requires":["click","mypy-extensions","pathspec","platformdirs"],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-10-07","group":"dev","license":"MIT","pythonRequires":">=3.8","weeklyDownloads":22000000,"installSize":980000,"environment":"dev"},{"name":"urllib3","installedVersion":"2.3.0","latestVersion":"2.3.0","status":"up-to-date","allVersions":["2.3.0"],"summary":"HTTP library with thread-safe connection pooling.","homePage":"https://urllib3.readthedocs.io","specifiedVersion":"","source":"transitive","requires":[],"isUsed":true,"vulnerabilities":[],"releaseDate":"2024-12-22","group":"main","license":"MIT","pythonRequires":">=3.8","weeklyDownloads":88000000,"installSize":520000,"environment":"main"},{"name":"numpy","installedVersion":"1.26.4","latestVersion":"2.2.1","status":"conflict-blocked","updateBlockedByConflict":true,"allVersions":["2.2.1","1.26.4"],"summary":"Fundamental package for array computing.","homePage":"https://numpy.org","specifiedVersion":"<2.0","source":"requirements.txt","requires":[],"isUsed":true,"hasConflict":true,"vulnerabilities":[],"releaseDate":"2024-02-05","group":"main","license":"BSD-3-Clause","pythonRequires":">=3.9","weeklyDownloads":92000000,"installSize":28000000,"environment":"main","previousVersion":"1.26.3"}],"graphPackages":[{"name":"requests","installedVersion":"2.31.0","status":"update-available","requires":["urllib3","certifi","charset-normalizer","idna"]},{"name":"flask","installedVersion":"2.0.3","status":"update-available","requires":["werkzeug","jinja2","click"]},{"name":"langchain","installedVersion":"0.3.14","status":"up-to-date","requires":["pydantic","langsmith","tenacity"]},{"name":"pydantic","installedVersion":"2.10.4","status":"up-to-date","requires":["annotated-types","pydantic-core"]},{"name":"pandas","installedVersion":"2.2.3","status":"drift","requires":["numpy","python-dateutil"]},{"name":"urllib3","installedVersion":"2.3.0","status":"up-to-date","requires":[]},{"name":"certifi","installedVersion":"2024.12.14","status":"up-to-date","requires":[]},{"name":"werkzeug","installedVersion":"3.1.3","status":"up-to-date","requires":[]},{"name":"jinja2","installedVersion":"3.1.5","status":"up-to-date","requires":["markupsafe"]},{"name":"numpy","installedVersion":"1.26.4","status":"conflict-blocked","requires":[]}],"scanStats":{"totalFiles":142,"totalImports":87,"scanDurationMs":1240,"venvPath":".venv","pythonVersion":"3.12.4"},"language":"en"}
+      }));
+    }, 150);
+  });
+</script>
+</body>
+</html>

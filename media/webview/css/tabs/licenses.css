@@ -1,0 +1,276 @@
+/* ── License Compliance View ─────────────────────── */
+#view-licenses {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.lic-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lic-header-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--vscode-foreground);
+  margin-bottom: 4px;
+}
+
+.lic-header-subtitle {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.lic-hint {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground) 22%, transparent);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--vscode-descriptionForeground);
+}
+
+.lic-hint-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.lic-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.lic-summary-card {
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--ease), transform var(--ease);
+}
+
+.lic-summary-card:hover {
+  transform: translateY(-1px);
+}
+
+.lic-summary-card.active {
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.lic-summary-card--low { border-top: 3px solid #4ade80; background: rgba(74, 222, 128, .06); }
+.lic-summary-card--medium { border-top: 3px solid #fb923c; background: rgba(251, 146, 60, .06); }
+.lic-summary-card--high { border-top: 3px solid #f87171; background: rgba(248, 113, 113, .06); }
+.lic-summary-card--unknown { border-top: 3px solid #94a3b8; background: rgba(148, 163, 184, .06); }
+
+.lic-summary-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  letter-spacing: .5px;
+}
+
+.lic-summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.lic-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.lic-search {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.lic-search:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.lic-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lic-filter-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--vscode-panel-border);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--ease), color var(--ease), border-color var(--ease);
+}
+
+.lic-filter-pill:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.lic-filter-pill.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: transparent;
+}
+
+.lic-group {
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.lic-group-header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lic-group-title-block {
+  min-width: 0;
+  flex: 1;
+}
+
+.lic-group-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.lic-group-meta {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 2px;
+}
+
+.lic-risk-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+}
+
+.lic-fulltext-wrap {
+  padding: 0 16px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 35%, transparent);
+}
+
+.lic-fulltext-toggle {
+  margin-top: 10px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lic-fulltext-toggle:hover {
+  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+}
+
+.lic-fulltext {
+  margin: 10px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background, transparent);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lic-pkg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+  cursor: pointer;
+  transition: background var(--ease);
+}
+
+.lic-pkg-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.lic-pkg-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+
+.lic-pkg-version {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+}
+
+.lic-empty {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.lic-no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}

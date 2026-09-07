@@ -1,0 +1,55 @@
+/* ── Empty State ─────────────────────────────────── */
+#empty-state {
+  display:         none;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  flex:            1;
+  gap:             12px;
+  color:           var(--vscode-descriptionForeground);
+}
+#empty-state .empty-icon { font-size: 52px; opacity: .5; margin-bottom: 4px; }
+#empty-state .empty-title {
+  font-size: 16px; font-weight: 700;
+  color: var(--vscode-foreground); margin-bottom: 4px;
+}
+#empty-state p { font-size: 13px; max-width: 340px; text-align: center; line-height: 1.6; margin: 0; }
+.empty-files {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 12px 0; width: 100%; max-width: 360px;
+}
+.empty-file-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+}
+.empty-file-icon { font-size: 18px; flex-shrink: 0; }
+.empty-file-item code {
+  font-size: 12px; font-weight: 600;
+  color: var(--vscode-foreground);
+  display: block; margin-bottom: 2px;
+}
+.empty-file-desc {
+  font-size: 11px; color: var(--vscode-descriptionForeground);
+}
+.empty-actions { margin-top: 8px; }
+.empty-btn {
+  padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-size: 13px; font-family: inherit;
+}
+.empty-btn:hover { opacity: .85; }
+.empty-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-foreground);
+}
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}

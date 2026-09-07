@@ -1,0 +1,15 @@
+/**
+ * Core Stylings for Python Package Visualizer.
+ * Instead of a monolithic stylesheet, this base file imports modular CSS subcomponents.
+ *
+ * WHY: Modular layout styles improve readability, follow the Open/Closed Principle (SOLID),
+ * and allow developers to locate specific rules instantly without reading thousands of lines.
+ */
+
+@import "./css/base.css";
+@import "./css/layout.css";
+@import "./css/components.css";
+@import "./css/list-view.css";
+@import "./css/detail-view.css";
+@import "./css/graph-view.css";
+@import "./css/tabs-view.css";

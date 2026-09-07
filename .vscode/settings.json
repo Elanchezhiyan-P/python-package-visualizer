@@ -1,0 +1,13 @@
+{
+  "files.eol": "\n",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "npm.autoDetect": "off",
+  "task.autoDetect": "off",
+  "npm.exclude": "**/.vscode-test/**",
+  "search.exclude": {
+    "**/.vscode-test": true
+  },
+  "files.watcherExclude": {
+    "**/.vscode-test/**": true
+  }
+}

@@ -1,0 +1,10 @@
+/* Conflict Tab Styles */
+#view-conflicts {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.conflict-row:hover {
+  opacity: 0.92;
+  transition: opacity 0.15s ease;
+}

@@ -1,0 +1,199 @@
+/* ── Detail Panel Sliding Drawer ──────────────────── */
+#detail-panel {
+  display:     none;
+  position:    fixed;
+  right:  0; top: 0; bottom: 0;
+  width:       300px;
+  background:  var(--vscode-sideBar-background);
+  border-left: 1px solid var(--vscode-panel-border);
+  overflow-y:  auto;
+  z-index:     200;
+  box-shadow:  -4px 0 24px rgba(0,0,0,.2);
+  animation:   slideIn var(--ease);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+#detail-header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  padding:         14px 16px 10px;
+  border-bottom:   1px solid var(--vscode-panel-border);
+  position:        sticky;
+  top:             0;
+  background:      var(--vscode-sideBar-background);
+  z-index:         1;
+}
+
+#detail-name {
+  font-size:   14px;
+  font-weight: 700;
+  color:       var(--vscode-foreground);
+}
+
+#detail-close {
+  background:  none;
+  border:      none;
+  color:       var(--vscode-descriptionForeground);
+  font-size:   18px;
+  line-height: 1;
+  cursor:      pointer;
+  padding:     2px 6px;
+  border-radius: var(--radius);
+  transition:  background var(--ease), color var(--ease);
+}
+#detail-close:hover {
+  background: var(--vscode-list-hoverBackground);
+  color:      var(--vscode-foreground);
+}
+
+#detail-body { padding: 14px 16px; }
+
+/* ── Panel Fields Labels & Chips ─────────────────── */
+.field {
+  margin-bottom: 12px;
+}
+.field label {
+  font-size:    10px;
+  font-weight:  700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color:        var(--vscode-descriptionForeground);
+  display:      block;
+  margin-bottom: 3px;
+}
+.field-value {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.version-chip {
+  display:       inline-block;
+  padding:       2px 7px;
+  border-radius: var(--radius);
+  margin:        2px;
+  font-size:     11px;
+  background:    var(--vscode-badge-background);
+  color:         var(--vscode-badge-foreground);
+  cursor:        pointer;
+  transition:    background var(--ease), transform var(--ease);
+  font-variant-numeric: tabular-nums;
+}
+.version-chip:hover {
+  background: var(--vscode-button-background);
+  color:      var(--vscode-button-foreground);
+  transform:  scale(1.05);
+}
+
+.version-chip-current {
+  background: color-mix(in srgb, #4ade80 18%, var(--vscode-badge-background));
+  border: 1px solid color-mix(in srgb, #4ade80 45%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.version-chip-current:hover {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  transform: scale(1.05);
+}
+
+/* ── Vulnerability Details ───────────────────────── */
+.vuln-card {
+  margin-top: 6px;
+  padding: 10px;
+  background: var(--c-vuln-bg);
+  border: 1px solid color-mix(in srgb, var(--c-vuln) 30%, transparent);
+  border-radius: var(--radius);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.vuln-id   { font-weight: 700; color: var(--c-vuln); }
+.vuln-fix  { color: var(--vscode-descriptionForeground); margin-top: 3px; }
+.vuln-desc { margin-top: 4px; color: var(--vscode-foreground); }
+
+/* ── Custom Metadata Grid ────────────────────────── */
+.detail-meta-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;
+}
+.detail-meta-item {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px; padding: 8px 12px;
+}
+.detail-meta-label {
+  font-size: 10px; color: var(--vscode-descriptionForeground);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.detail-meta-value {
+  font-size: 13px; font-weight: 600; color: var(--vscode-foreground); margin-top: 2px;
+}
+
+.detail-license-short {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.detail-license-details {
+  margin-top: 6px;
+}
+
+.detail-license-details--block {
+  margin: 10px 0 4px;
+  padding: 0;
+}
+
+.detail-license-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+  list-style: none;
+  user-select: none;
+}
+
+.detail-license-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-license-full {
+  margin: 8px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background, transparent);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-weight: 400;
+}
+
+/* ── Overlay Backdrop (dismiss panels) ────────────── */
+#overlay {
+  display:    none;
+  position:   fixed;
+  inset:      0;
+  z-index:    199;
+  background: rgba(0,0,0,.18);
+  backdrop-filter: blur(1px);
+}
+
+/* External documentation links */
+.pkg-ext-link {
+  font-size: 10px;
+  color: var(--vscode-textLink-foreground);
+  opacity: 0.7;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pkg-ext-link:hover { opacity: 1; }

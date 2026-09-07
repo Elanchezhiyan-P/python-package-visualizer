@@ -1,0 +1,16 @@
+{
+  "include": ["out-test/src/**/*.js"],
+  "exclude": [
+    "out-test/test/**",
+    "out-test/src/extension.js"
+  ],
+  "reporter": ["text", "json-summary"],
+  "reports-dir": "coverage",
+  "src": ["src"],
+  "all": true,
+  "check-coverage": true,
+  "lines": 79,
+  "branches": 72,
+  "functions": 81,
+  "statements": 79
+}

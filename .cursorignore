@@ -1,0 +1,26 @@
+﻿# Dependencies
+node_modules/
+
+# Build & test outputs
+dist/
+out/
+out-test/
+.vscode-test/
+
+# Packaged extension
+*.vsix
+
+# Source maps & logs
+*.js.map
+*.log
+.cache/
+
+# Lock file (large, low signal for indexing)
+package-lock.json
+
+# OS & local IDE
+.DS_Store
+Thumbs.db
+.vscode/tasks.json
+.vscode/launch.json
+.claude/settings.local.json

@@ -1,0 +1,37 @@
+/* ── Welcome Tour ───────────────────────────────── */
+#tour-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
+  pointer-events: none;
+}
+#tour-backdrop.active { display: block; }
+#tour-tooltip {
+  display: none; position: fixed; z-index: 1001;
+  width: 260px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+#tour-tooltip.active { display: block; }
+#tour-step-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--vscode-descriptionForeground); margin-bottom: 6px;
+}
+#tour-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+#tour-text  { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.5; margin-bottom: 14px; }
+#tour-actions { display: flex; justify-content: space-between; gap: 8px; }
+#tour-skip {
+  padding: 4px 10px; background: none; border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--radius); color: var(--vscode-descriptionForeground);
+  font-size: 11px; cursor: pointer;
+}
+#tour-skip:hover { border-color: var(--vscode-foreground); }
+#tour-next {
+  padding: 4px 14px; background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground); border: none;
+  border-radius: var(--radius); font-size: 11px; cursor: pointer;
+}
+#tour-next:hover { background: var(--vscode-button-hoverBackground); }

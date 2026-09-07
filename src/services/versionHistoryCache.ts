@@ -42,12 +42,17 @@ export class VersionHistoryCache {
       data[normalized] = { packageName: normalized, entries: [] };
     }
 
-    // Avoid duplicate consecutive entries for the same version
+    // Avoid duplicate consecutive entries for the same version; refresh timing if re-installed
     const entries = data[normalized].entries;
     if (
       entries.length > 0 &&
       entries[entries.length - 1].version === version
     ) {
+      if (installTime !== undefined && installTime > 0) {
+        entries[entries.length - 1].installTime = installTime;
+        entries[entries.length - 1].installedAt = new Date().toISOString();
+        this.writeFile(workspaceRoot, data);
+      }
       return;
     }
 
@@ -60,6 +65,18 @@ export class VersionHistoryCache {
 
     this.writeFile(workspaceRoot, data);
     this.logger.debug(`History: recorded ${normalized}@${version} (${source})`);
+  }
+
+  /** Most recent timed install (seconds) for a package, if any. */
+  getLatestInstallTime(workspaceRoot: string, packageName: string): number | undefined {
+    const entries = this.getHistory(workspaceRoot, packageName);
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const t = entries[i].installTime;
+      if (typeof t === 'number' && t > 0) {
+        return t;
+      }
+    }
+    return undefined;
   }
 
   getHistory(workspaceRoot: string, packageName: string): VersionHistoryEntry[] {

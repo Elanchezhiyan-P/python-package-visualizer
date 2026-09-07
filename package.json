@@ -1,12 +1,13 @@
 {
-  "name": "python-package-visualizer",
-  "displayName": "Python Package Visualizer",
-  "description": "A VS Code extension to visualize, manage and audit Python workspace dependencies — with version checks, CVE badges, unused package detection, dependency graph, and one-click updates.",
-  "version": "3.0.0",
-  "publisher": "Elanchezhiyan-P",
+  "name": "python-package-visualizer-community",
+  "displayName": "Python Package Visualizer (Community)",
+  "description": "Community-maintained fork to visualize, manage and audit Python workspace dependencies — version checks, CVE badges, unused package detection, dependency graph, uv migration, and one-click updates.",
+  "version": "3.3.1",
+  "icon": "media/icon.png",
+  "publisher": "FaberVi",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Other",
@@ -22,13 +23,16 @@
     "visualizer"
   ],
   "author": {
-    "name": "Elanchezhiyan P",
-    "url": "https://codebyelan.in"
+    "name": "Vincenzo Fabiano",
+    "url": "https://github.com/FaberVi"
   },
-  "homepage": "https://codebyelan.in",
+  "homepage": "https://github.com/FaberVi/python-package-visualizer",
+  "bugs": {
+    "url": "https://github.com/FaberVi/python-package-visualizer/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Elanchezhiyan-P/python-package-visualizer"
+    "url": "https://github.com/FaberVi/python-package-visualizer"
   },
   "activationEvents": [
     "onLanguage:python",
@@ -52,7 +56,8 @@
         {
           "type": "webview",
           "id": "pythonPackageVisualizer.sidebar",
-          "name": "Package Visualizer"
+          "name": "Package Visualizer",
+          "icon": "media/icon.svg"
         }
       ]
     },
@@ -82,6 +87,16 @@
       {
         "command": "extension.rollbackPackage",
         "title": "Rollback Package",
+        "category": "Python Packages"
+      },
+      {
+        "command": "extension.selectManualRequirements",
+        "title": "Select requirements.txt Manually...",
+        "category": "Python Packages"
+      },
+      {
+        "command": "extension.clearManualRequirements",
+        "title": "Clear Manually Selected requirements.txt",
         "category": "Python Packages"
       }
     ],
@@ -117,6 +132,12 @@
         {
           "command": "extension.rollbackPackage",
           "when": "false"
+        },
+        {
+          "command": "extension.selectManualRequirements"
+        },
+        {
+          "command": "extension.clearManualRequirements"
         }
       ]
     },
@@ -147,7 +168,12 @@
         },
         "pythonPackageVisualizer.updateCheckSchedule": {
           "type": "string",
-          "enum": ["off", "daily", "weekly", "monthly"],
+          "enum": [
+            "off",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
           "default": "off",
           "description": "Schedule periodic checks for outdated packages."
         },
@@ -185,6 +211,29 @@
           "type": "boolean",
           "default": true,
           "description": "Show package info and API cost estimates when hovering over method calls (e.g., ChatGroq, fitz.open)."
+        },
+        "pythonPackageVisualizer.language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "it"
+          ],
+          "default": "en",
+          "enumDescriptions": [
+            "English",
+            "Italiano"
+          ],
+          "description": "UI language for the Package Visualizer webview and sidebar."
+        },
+        "pythonPackageVisualizer.cursorAiAnalysis": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the AI review button for unused packages in Cursor. Analysis runs only when you click that button — never automatically."
+        },
+        "pythonPackageVisualizer.cursorAiUseAutoModel": {
+          "type": "boolean",
+          "default": true,
+          "description": "When opening Cursor Agent for unused-package analysis, use the Auto model (Cursor model id: default)."
         }
       }
     }
@@ -195,22 +244,29 @@
     "watch": "node esbuild.js --watch",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node ./out-test/test/runTests.js",
-    "lint": "eslint src --ext ts",
-    "package": "vsce package"
+    "test:unit": "node -r ./test/helpers/registerVscodeMock.cjs ./out-test/test/runUnitTests.js",
+    "test:grep": "node -r ./test/helpers/registerVscodeMock.cjs ./out-test/test/runGrepTests.js",
+    "test:coverage": "npm run pretest && c8 --config c8.json node -r ./test/helpers/registerVscodeMock.cjs ./out-test/test/runUnitTests.js",
+    "test:coverage:check": "npm run pretest && c8 --config c8.json node -r ./test/helpers/registerVscodeMock.cjs ./out-test/test/runUnitTests.js",
+    "lint": "eslint src",
+    "package": "vsce package",
+    "screenshots": "python scripts/screenshots/capture.py"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "@vscode/test-electron": "^2.3.8",
-    "@vscode/vsce": "^2.24.0",
-    "esbuild": "^0.28.0",
-    "mocha": "^7.2.0",
-    "typescript": "^5.3.0"
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^25.9.1",
+    "@types/vscode": "^1.105.0",
+    "@typescript-eslint/eslint-plugin": "^8.69.0",
+    "@typescript-eslint/parser": "^8.69.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "c8": "^12.0.0",
+    "esbuild": "^0.28.2",
+    "glob": "^13.0.6",
+    "mocha": "^12.0.0",
+    "typescript": "^6.0.3"
   }
 }
