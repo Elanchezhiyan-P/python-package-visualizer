@@ -1,0 +1,60 @@
+/* ── CSS variables & Theme tokens ────────────────── */
+:root {
+  --c-ok:        #4ade80;
+  --c-update:    #fb923c;
+  --c-vuln:      #f87171;
+  --c-unknown:   #94a3b8;
+  --c-missing:   #64748b;
+  --c-ok-bg:     rgba(74,222,128,.13);
+  --c-update-bg: rgba(251,146,60,.13);
+  --c-vuln-bg:   rgba(248,113,113,.13);
+  --c-unknown-bg:rgba(148,163,184,.12);
+  --c-missing-bg:rgba(100,116,139,.12);
+  --radius:      6px;
+  --radius-lg:   10px;
+  --ease:        0.16s cubic-bezier(.4,0,.2,1);
+  --shadow:      0 4px 24px rgba(0,0,0,.18);
+  --shadow-sm:   0 2px 8px  rgba(0,0,0,.12);
+}
+
+/* ── Reset ───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size:   13px;
+  color:       var(--vscode-foreground);
+  background:  var(--vscode-editor-background);
+  display:     flex;
+  flex-direction: column;
+  height:      100vh;
+  overflow:    hidden;
+}
+
+/* ── Scrollbars ──────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* ── Code blocks elements ────────────────────────── */
+code {
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
+  border-radius: 3px;
+  font-size: .9em;
+}

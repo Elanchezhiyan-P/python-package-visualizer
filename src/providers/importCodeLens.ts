@@ -3,6 +3,8 @@ import { VersionChecker, VersionCheckResult } from '../services/versionChecker.j
 import { ImportScanner } from '../modules/importScanner.js';
 import { PackageScanner } from '../modules/packageScanner.js';
 import { Logger } from '../utils/logger.js';
+import { isActionableUpdate } from '../commands/handlers/visualizer/scanHelpers.js';
+import { getIgnoredUpdateVersion } from '../services/ignoredUpdates.js';
 
 interface ImportInfo {
   line: number;
@@ -21,6 +23,7 @@ export class ImportCodeLensProvider implements vscode.CodeLensProvider {
     private readonly checker: VersionChecker,
     private readonly importScanner: ImportScanner,
     private readonly packageScanner: PackageScanner,
+    private readonly context: vscode.ExtensionContext,
   ) {}
 
   refresh(): void {
@@ -37,13 +40,20 @@ export class ImportCodeLensProvider implements vscode.CodeLensProvider {
     const imports = this.parseImports(document);
     const lenses: vscode.CodeLens[] = [];
 
-    // Look up installed versions for the workspace
+    // Look up installed versions and conflict markers for the document workspace folder
     let installedMap = new Map<string, string>();
-    const ws = vscode.workspace.workspaceFolders?.[0];
-    if (ws) {
+    const conflictedPkgs = new Set<string>();
+    const wsFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+    const workspaceRoot = wsFolder?.uri.fsPath ?? this.packageScanner.getActiveProjectRoot();
+    if (workspaceRoot) {
       try {
-        const scanned = await this.packageScanner.scanWorkspace(ws.uri.fsPath);
+        const scanned = (await this.packageScanner.scanWorkspace(workspaceRoot)).packages;
         installedMap = new Map(scanned.map(p => [p.name.toLowerCase(), p.installedVersion || '']));
+        const conflicts = await this.packageScanner.checkConflicts(workspaceRoot);
+        for (const conflict of conflicts) {
+          conflictedPkgs.add(conflict.package.toLowerCase());
+          conflictedPkgs.add(conflict.conflictingPackage.toLowerCase());
+        }
       } catch {
         // ignore
       }
@@ -63,11 +73,16 @@ export class ImportCodeLensProvider implements vscode.CodeLensProvider {
       const installedVer = installedMap.get(imp.packageName.toLowerCase()) || '';
       const latestVer = result.latestVersion;
       const vulns = result.vulnerabilities?.length ?? 0;
+      const hasConflict = conflictedPkgs.has(imp.packageName.toLowerCase());
+      const ignoredVersion = workspaceRoot
+        ? getIgnoredUpdateVersion(this.context, workspaceRoot, imp.packageName)
+        : undefined;
+      const updateActionable = isActionableUpdate(result, hasConflict, ignoredVersion);
 
       // Build the status icon and primary lens title
       let icon = '\u{1F4E6}';
       let versionDisplay: string;
-      if (installedVer && installedVer !== latestVer) {
+      if (updateActionable && installedVer) {
         versionDisplay = `${installedVer} \u2192 ${latestVer}`;
         icon = '\u26A0\uFE0F';
       } else if (installedVer) {
@@ -96,13 +111,23 @@ export class ImportCodeLensProvider implements vscode.CodeLensProvider {
           command: 'extension.openPackageVisualizer',
           arguments: [],
         }));
-      } else if (installedVer && installedVer !== latestVer) {
-        lenses.push(new vscode.CodeLens(imp.range, {
-          title: `\u2191 Update to ${latestVer}`,
-          tooltip: `Run pip install --upgrade ${imp.packageName}`,
-          command: 'extension.updatePackage',
-          arguments: [imp.packageName],
-        }));
+      } else if (updateActionable) {
+        const hasConflictLens = conflictedPkgs.has(imp.packageName.toLowerCase());
+        if (hasConflictLens) {
+          lenses.push(new vscode.CodeLens(imp.range, {
+            title: `\u26A1 Conflict \u2014 blocked update`,
+            tooltip: `Update blocked due to dependency conflicts. Open Package Visualizer to revert or force update.`,
+            command: 'extension.openPackageVisualizer',
+            arguments: [],
+          }));
+        } else {
+          lenses.push(new vscode.CodeLens(imp.range, {
+            title: `\u2191 Update to ${latestVer}`,
+            tooltip: `Run pip install --upgrade ${imp.packageName}`,
+            command: 'extension.updatePackage',
+            arguments: [imp.packageName],
+          }));
+        }
       } else if (!installedVer) {
         lenses.push(new vscode.CodeLens(imp.range, {
           title: `\u2B07 Install`,

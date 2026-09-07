@@ -1,0 +1,19 @@
+/* ── History Timeline View ──────────────────────── */
+.history-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+  font-size: 12px;
+}
+.history-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.history-dot.pip-install { background: var(--c-ok); }
+.history-dot.detected    { background: var(--c-unknown); }
+.history-dot.pip-rollback { background: var(--c-missing); }
+.history-action { font-weight: 600; }
+.history-time   { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }

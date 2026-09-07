@@ -1,1876 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
-             script-src 'nonce-{{NONCE}}' https://d3js.org;
-             style-src 'unsafe-inline';
-             style-src-elem 'unsafe-inline';
+             script-src 'nonce-{{NONCE}}' {{CSP_SOURCE}};
+             style-src 'nonce-{{NONCE}}' {{CSP_SOURCE}} 'unsafe-inline';
+             style-src-elem 'nonce-{{NONCE}}' {{CSP_SOURCE}} 'unsafe-inline';
              style-src-attr 'unsafe-inline';
              font-src 'none';
-             img-src data: {{CSP_SOURCE}};" />
+             img-src data: {{CSP_SOURCE}};">
   <title>Python Package Visualizer</title>
-  <style>
-    /* ── Tokens ──────────────────────────────────────── */
-    :root {
-      --c-ok:        #4ade80;
-      --c-update:    #fb923c;
-      --c-vuln:      #f87171;
-      --c-unknown:   #94a3b8;
-      --c-missing:   #64748b;
-      --c-ok-bg:     rgba(74,222,128,.13);
-      --c-update-bg: rgba(251,146,60,.13);
-      --c-vuln-bg:   rgba(248,113,113,.13);
-      --c-unknown-bg:rgba(148,163,184,.12);
-      --c-missing-bg:rgba(100,116,139,.12);
-      --radius:      6px;
-      --radius-lg:   10px;
-      --ease:        0.16s cubic-bezier(.4,0,.2,1);
-      --shadow:      0 4px 24px rgba(0,0,0,.18);
-      --shadow-sm:   0 2px 8px  rgba(0,0,0,.12);
-    }
-
-    /* ── Reset ───────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: var(--vscode-font-family);
-      font-size:   13px;
-      color:       var(--vscode-foreground);
-      background:  var(--vscode-editor-background);
-      display:     flex;
-      flex-direction: column;
-      height:      100vh;
-      overflow:    hidden;
-    }
-
-    /* ── Scrollbar ───────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb {
-      background: var(--vscode-scrollbarSlider-background);
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--vscode-scrollbarSlider-hoverBackground);
-    }
-
-    /* ── Header ──────────────────────────────────────── */
-    #header {
-      display:         flex;
-      align-items:     center;
-      justify-content: space-between;
-      padding:         11px 18px;
-      background:      var(--vscode-sideBar-background);
-      border-bottom:   1px solid var(--vscode-panel-border);
-      flex-shrink:     0;
-      gap:             10px;
-    }
-
-    #header-left {
-      display:     flex;
-      align-items: center;
-      gap:         9px;
-    }
-
-    #header-icon {
-      width:  28px; height: 28px;
-      background: linear-gradient(135deg,
-        var(--vscode-button-background) 0%,
-        color-mix(in srgb, var(--vscode-button-background) 70%, #fff) 100%);
-      border-radius: 7px;
-      display:       flex;
-      align-items:   center;
-      justify-content: center;
-      font-size:     15px;
-      flex-shrink:   0;
-      box-shadow:    var(--shadow-sm);
-    }
-
-    #header h1 {
-      font-size:      13px;
-      font-weight:    700;
-      letter-spacing: .3px;
-      line-height:    1;
-    }
-    #header-sub {
-      font-size: 10px;
-      color:     var(--vscode-descriptionForeground);
-      margin-top: 1px;
-    }
-
-    #header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-
-    /* ── Shared button base ──────────────────────────── */
-    .hdr-btn {
-      display:     inline-flex;
-      align-items: center;
-      gap:         5px;
-      padding:     5px 11px;
-      font-size:   12px;
-      font-family: inherit;
-      border:      none;
-      border-radius: var(--radius);
-      cursor:      pointer;
-      transition:  background var(--ease), opacity var(--ease), transform var(--ease);
-      white-space: nowrap;
-    }
-    .hdr-btn:active { transform: scale(.97); }
-    .hdr-btn:disabled { opacity: .45; cursor: default; transform: none; }
-
-    #btn-refresh {
-      background: var(--vscode-button-secondaryBackground);
-      color:      var(--vscode-button-secondaryForeground);
-    }
-    #btn-refresh:hover:not(:disabled) {
-      background: var(--vscode-button-secondaryHoverBackground);
-    }
-
-    /* ── Toolbar ─────────────────────────────────────── */
-    #toolbar {
-      display:   flex;
-      gap:       8px;
-      padding:   8px 18px;
-      background: var(--vscode-sideBar-background);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-shrink: 0;
-    }
-
-    #search-wrap {
-      flex: 1;
-      position: relative;
-    }
-    #search-icon {
-      position: absolute;
-      left: 9px; top: 50%;
-      transform: translateY(-50%);
-      font-size: 13px;
-      color: var(--vscode-descriptionForeground);
-      pointer-events: none;
-    }
-    #search {
-      width:      100%;
-      padding:    5px 10px 5px 30px;
-      background: var(--vscode-input-background);
-      color:      var(--vscode-input-foreground);
-      border:     1px solid var(--vscode-input-border, transparent);
-      border-radius: var(--radius);
-      font-size:  12px;
-      font-family: inherit;
-      transition: border-color var(--ease), box-shadow var(--ease);
-    }
-    #search:focus {
-      outline:      none;
-      border-color: var(--vscode-focusBorder);
-      box-shadow:   0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 25%, transparent);
-    }
-
-    .toolbar-select {
-      padding:      5px 9px;
-      background:   var(--vscode-dropdown-background);
-      color:        var(--vscode-dropdown-foreground);
-      border:       1px solid var(--vscode-dropdown-border, transparent);
-      border-radius: var(--radius);
-      font-size:    12px;
-      font-family:  inherit;
-      cursor:       pointer;
-      transition:   border-color var(--ease);
-    }
-    .toolbar-select:focus {
-      outline:      none;
-      border-color: var(--vscode-focusBorder);
-    }
-    .toolbar-select.active {
-      border-color: color-mix(in srgb, var(--vscode-focusBorder) 70%, transparent);
-      color:        var(--vscode-button-background);
-      font-weight:  500;
-    }
-
-    /* Safe Mode toolbar button */
-    #btn-safe-mode {
-      padding:      5px 10px;
-      background:   var(--vscode-dropdown-background);
-      color:        var(--vscode-dropdown-foreground);
-      border:       1px solid var(--vscode-dropdown-border, transparent);
-      border-radius: var(--radius);
-      font-size:    12px;
-      font-family:  inherit;
-      cursor:       pointer;
-      white-space:  nowrap;
-      transition:   border-color var(--ease), background var(--ease), color var(--ease);
-    }
-    #btn-safe-mode:hover {
-      border-color: var(--vscode-focusBorder);
-    }
-    #btn-safe-mode.active {
-      background:   rgba(74,222,128,.15);
-      color:        var(--c-ok);
-      border-color: color-mix(in srgb, var(--c-ok) 50%, transparent);
-      font-weight:  500;
-    }
-
-    /* ── Stats Cards ─────────────────────────────────── */
-    #stats-bar {
-      display:    flex;
-      gap:        8px;
-      padding:    8px 18px;
-      background: var(--vscode-editorWidget-background);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-shrink: 0;
-      flex-wrap:  wrap;
-    }
-
-    .stat-card {
-      display:      flex;
-      align-items:  center;
-      gap:          6px;
-      padding:      4px 10px;
-      border-radius: var(--radius-lg);
-      font-size:    11px;
-      font-weight:  500;
-      cursor:       default;
-      transition:   background var(--ease), box-shadow var(--ease), filter var(--ease);
-      user-select:  none;
-    }
-    .stat-card.clickable { cursor: pointer; }
-    .stat-card.clickable:hover { filter: brightness(1.15); }
-    .stat-card.clickable.selected {
-      box-shadow: 0 0 0 2px currentColor;
-      filter: brightness(1.1);
-    }
-    .stat-card.ok       { background: var(--c-ok-bg);     color: var(--c-ok); }
-    .stat-card.update   { background: var(--c-update-bg);  color: var(--c-update); }
-    .stat-card.unknown  { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .stat-card.vuln     { background: var(--c-vuln-bg);    color: var(--c-vuln); }
-    .stat-card.conflict { background: rgba(249,115,22,.13); color: #f97316; }
-    .stat-card.safe     { background: rgba(74,222,128,.13); color: var(--c-ok); }
-
-    .stat-num {
-      font-size:   14px;
-      font-weight: 700;
-      line-height: 1;
-    }
-
-    /* ── Tabs ────────────────────────────────────────── */
-    #tab-bar {
-      display:      flex;
-      gap:          2px;
-      padding:      0 18px;
-      background:   var(--vscode-sideBar-background);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-shrink:  0;
-    }
-    .tab {
-      padding:       9px 14px 8px;
-      font-size:     12px;
-      font-weight:   500;
-      cursor:        pointer;
-      border-bottom: 2px solid transparent;
-      color:         var(--vscode-tab-inactiveForeground);
-      transition:    color var(--ease), border-color var(--ease);
-      white-space:   nowrap;
-      letter-spacing: .2px;
-    }
-    .tab:hover:not(.active) {
-      color: var(--vscode-foreground);
-    }
-    .tab.active {
-      color:        var(--vscode-tab-activeForeground);
-      border-bottom-color: var(--vscode-focusBorder);
-    }
-
-    /* ── Content ─────────────────────────────────────── */
-    #content {
-      flex:     1;
-      overflow: hidden;
-      display:  flex;
-      flex-direction: column;
-    }
-
-    /* ── Table shared ────────────────────────────────── */
-    table {
-      width:           100%;
-      border-collapse: collapse;
-      font-size:       12px;
-    }
-    thead {
-      position:   sticky;
-      top:        0;
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      z-index:    2;
-    }
-    th {
-      padding:     0;
-      border-bottom: 1px solid var(--vscode-panel-border);
-      white-space: nowrap;
-    }
-
-    /* Sortable header button */
-    th .th-inner {
-      display:      inline-flex;
-      align-items:  center;
-      gap:          5px;
-      padding:      8px 12px;
-      width:        100%;
-      font-weight:  600;
-      font-size:    11px;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color:        var(--vscode-descriptionForeground);
-      cursor:       pointer;
-      user-select:  none;
-      transition:   color var(--ease), background var(--ease);
-      border-radius: 0;
-    }
-    th .th-inner:hover {
-      color:      var(--vscode-foreground);
-      background: var(--vscode-list-hoverBackground);
-    }
-    th.sorted .th-inner {
-      color: var(--vscode-foreground);
-    }
-    th:not([data-col]) .th-inner { cursor: default; }
-    th:not([data-col]) .th-inner:hover { background: none; }
-
-    /* Sort icon */
-    .sort-icon {
-      display:     inline-flex;
-      flex-direction: column;
-      gap:         1px;
-      opacity:     .35;
-      transition:  opacity var(--ease), transform var(--ease);
-      font-size:   9px;
-      line-height: 1;
-    }
-    th.sorted .sort-icon    { opacity: 1; }
-    th.sort-asc  .sort-icon { color: var(--vscode-button-background); }
-    th.sort-desc .sort-icon { color: var(--vscode-button-background); }
-    td {
-      padding:      9px 12px;
-      border-bottom: 1px solid color-mix(in srgb,
-        var(--vscode-panel-border) 60%, transparent);
-      vertical-align: middle;
-    }
-    tbody tr {
-      transition: background var(--ease);
-      border-left: 3px solid transparent;
-    }
-    tbody tr:hover td {
-      background: var(--vscode-list-hoverBackground);
-    }
-    /* Row left-border accent by status */
-    tbody tr.row-update-available { border-left-color: var(--c-update); }
-    tbody tr.row-up-to-date        { border-left-color: var(--c-ok); }
-    tbody tr.row-vulnerable        { border-left-color: var(--c-vuln); background: rgba(248,113,113,.03); }
-    tbody tr.row-conflict          { border-left-color: #f97316; background: rgba(249,115,22,.03); }
-    tbody tr.row-not-installed     { border-left-color: var(--c-missing); }
-
-    /* ── Health Score ring ───────────────────────────────── */
-    .health-ring { vertical-align: middle; }
-    .health-ring circle.track { fill: none; stroke: var(--vscode-panel-border); stroke-width: 2.5; }
-    .health-ring circle.fill  { fill: none; stroke-width: 2.5; stroke-linecap: round;
-                                  transition: stroke-dashoffset .5s ease, stroke .3s; }
-    .health-score-good   .fill { stroke: var(--c-ok); }
-    .health-score-warn   .fill { stroke: var(--c-update); }
-    .health-score-bad    .fill { stroke: var(--c-vuln); }
-    .health-score-text {
-      font-size: 6px; font-weight: 700; fill: currentColor;
-      dominant-baseline: central; text-anchor: middle;
-    }
-    td.col-health { width: 48px; text-align: center; }
-
-    /* ── Size heatmap row tint ───────────────────────────── */
-    tbody tr.size-md  td { background: color-mix(in srgb, rgba(251,146,60,.07) 100%, transparent); }
-    tbody tr.size-lg  td { background: color-mix(in srgb, rgba(251,146,60,.13) 100%, transparent); }
-    tbody tr.size-xl  td { background: color-mix(in srgb, rgba(251,146,60,.20) 100%, transparent); }
-    tbody tr.size-md:hover td,
-    tbody tr.size-lg:hover td,
-    tbody tr.size-xl:hover td { background: var(--vscode-list-hoverBackground); }
-
-    /* ── Install/Update row progress bar ────────────────── */
-    tbody tr { position: relative; overflow: hidden; }
-    tbody tr[data-progress]::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0;
-      height: 2px;
-      width: var(--row-progress, 0%);
-      background: var(--vscode-button-background);
-      transition: width 0.4s ease;
-    }
-    tbody tr[data-progress] .progress-stage {
-      display: inline-block;
-      font-size: 10px;
-      color: var(--vscode-descriptionForeground);
-      margin-left: 6px;
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
-    }
-
-    /* ── List View ───────────────────────────────────── */
-    #view-list {
-      flex:       1;
-      overflow-y: auto;
-    }
-
-    /* Package name cell */
-    .pkg-name {
-      display:     flex;
-      align-items: center;
-      gap:         6px;
-      flex-wrap:   wrap;
-    }
-    .pkg-name-link {
-      font-weight:      600;
-      font-size:        12.5px;
-      cursor:           pointer;
-      text-decoration:  none;
-      color:            var(--vscode-foreground);
-      transition:       color var(--ease);
-    }
-    .pkg-name-link:hover { color: var(--vscode-textLink-foreground); }
-
-    .pkg-source {
-      font-size:  10px;
-      color:      var(--vscode-descriptionForeground);
-      padding:    1px 5px;
-      background: color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-      border-radius: 3px;
-    }
-
-    /* Version cells */
-    .ver { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
-    .ver-latest { color: var(--c-ok); font-weight: 500; }
-    .copy-hint {
-      font-size: 9px;
-      opacity: 0;
-      margin-left: 3px;
-      transition: opacity .12s;
-      color: var(--vscode-textLink-foreground);
-      pointer-events: none;
-      user-select: none;
-    }
-    td:hover .copy-hint { opacity: .55; }
-
-    /* ── Badges ──────────────────────────────────────── */
-    .badge {
-      display:      inline-flex;
-      align-items:  center;
-      gap:          4px;
-      padding:      3px 9px;
-      border-radius: var(--radius-lg);
-      font-size:    11px;
-      font-weight:  500;
-      white-space:  nowrap;
-      letter-spacing: .15px;
-    }
-    .badge.up-to-date      { background: var(--c-ok-bg);      color: var(--c-ok); }
-    .badge.update-available { background: var(--c-update-bg);  color: var(--c-update); }
-    .badge.unknown          { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .badge.not-installed    { background: var(--c-missing-bg); color: var(--c-missing); }
-    .badge.vulnerable       { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
-
-    .inline-tag {
-      display:      inline-flex;
-      align-items:  center;
-      gap:          3px;
-      font-size:    10px;
-      padding:      1px 5px;
-      border-radius: 3px;
-      white-space:  nowrap;
-    }
-    .inline-tag.unused      { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .inline-tag.cve         { background: var(--c-vuln-bg);    color: var(--c-vuln); font-weight: 700; }
-    .inline-tag.conflict    { background: rgba(249,115,22,.15); color: #f97316; font-weight: 700; }
-    .inline-tag.major-lock  { background: var(--c-unknown-bg); color: var(--c-unknown); }
-    .inline-tag.drift       { background: rgba(251,146,60,.15); color: var(--c-update); }
-
-    /* ── Popularity badge ────────────────────────────────── */
-    .pkg-popularity {
-      font-size:    10px;
-      color:        var(--vscode-descriptionForeground);
-      padding:      1px 5px;
-      border-radius: 3px;
-      background:   var(--c-unknown-bg);
-      white-space:  nowrap;
-    }
-
-    /* ── Alert banners (CVE / Drift) ─────────────────────── */
-    .alert-banner {
-      display:       none;
-      align-items:   center;
-      gap:           10px;
-      padding:       8px 14px;
-      border-radius: var(--radius);
-      font-size:     12px;
-      margin-bottom: 8px;
-      flex-wrap:     wrap;
-    }
-    .alert-banner.visible { display: flex; }
-    #vuln-banner {
-      background: var(--c-vuln-bg);
-      border:     1px solid color-mix(in srgb, var(--c-vuln) 30%, transparent);
-      color:      var(--c-vuln);
-    }
-    #drift-banner {
-      background: var(--c-update-bg);
-      border:     1px solid color-mix(in srgb, var(--c-update) 30%, transparent);
-      color:      var(--c-update);
-    }
-    .alert-banner-msg { flex: 1; }
-    .alert-banner-action {
-      padding:      3px 10px;
-      background:   rgba(255,255,255,.1);
-      border:       1px solid currentColor;
-      border-radius: var(--radius);
-      color:        inherit;
-      font-size:    11px;
-      cursor:       pointer;
-      white-space:  nowrap;
-    }
-    .alert-banner-action:hover { background: rgba(255,255,255,.18); }
-    .alert-banner-dismiss {
-      padding:    2px 6px;
-      background: none;
-      border:     none;
-      color:      inherit;
-      opacity:    .6;
-      cursor:     pointer;
-      font-size:  14px;
-      line-height: 1;
-    }
-    .alert-banner-dismiss:hover { opacity: 1; }
-
-    /* ── License Compliance Tab ──────────────────────────── */
-    #view-licenses {
-      flex: 1; overflow-y: auto; padding: 16px 18px;
-    }
-    .license-summary {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
-    }
-    .license-group { margin-bottom: 20px; }
-    .license-group-header {
-      display:       flex;
-      align-items:   center;
-      gap:           8px;
-      font-size:     12px;
-      font-weight:   600;
-      margin-bottom: 8px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-    .license-risk-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
-    }
-    .license-risk-safe       { background: var(--c-ok-bg);             color: var(--c-ok); }
-    .license-risk-caution    { background: var(--c-update-bg);          color: var(--c-update); }
-    .license-risk-restricted { background: var(--c-vuln-bg);            color: var(--c-vuln); }
-    .license-risk-unknown    { background: var(--c-unknown-bg);         color: var(--c-unknown); }
-    .license-pkg-list {
-      display: flex; flex-wrap: wrap; gap: 6px;
-    }
-    .license-pkg-chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 9px; border-radius: var(--radius);
-      background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--vscode-panel-border);
-      font-size: 11px; cursor: pointer;
-      transition: border-color var(--ease);
-    }
-    .license-pkg-chip:hover { border-color: var(--vscode-focusBorder); }
-    .license-pkg-chip .lpc-name { font-weight: 500; }
-    .license-pkg-chip .lpc-lic  { font-size: 10px; color: var(--vscode-descriptionForeground); }
-
-    /* ── Snapshots Tab ───────────────────────────────────── */
-    #view-snapshots {
-      flex: 1; overflow-y: auto; padding: 16px 18px;
-    }
-    #snapshots-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    #snapshots-header h3 { font-size: 13px; font-weight: 600; }
-    #btn-take-snapshot {
-      padding: 5px 14px;
-      background: var(--vscode-button-background);
-      color:      var(--vscode-button-foreground);
-      border:     none; border-radius: var(--radius);
-      font-size: 12px; font-family: inherit; cursor: pointer;
-    }
-    #btn-take-snapshot:hover { background: var(--vscode-button-hoverBackground); }
-    .snapshot-card {
-      display:       flex;
-      align-items:   center;
-      gap:           12px;
-      padding:       10px 14px;
-      background:    var(--vscode-editorWidget-background);
-      border:        1px solid var(--vscode-panel-border);
-      border-radius: var(--radius);
-      margin-bottom: 8px;
-      transition:    border-color var(--ease);
-    }
-    .snapshot-card:hover { border-color: var(--vscode-focusBorder); }
-    .snapshot-icon { font-size: 20px; }
-    .snapshot-info { flex: 1; }
-    .snapshot-name { font-size: 12px; font-weight: 600; }
-    .snapshot-meta { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-    .snapshot-actions { display: flex; gap: 6px; }
-    .snap-btn {
-      padding: 3px 10px; border-radius: var(--radius);
-      font-size: 11px; font-family: inherit; cursor: pointer;
-      border: 1px solid var(--vscode-panel-border);
-      background: var(--vscode-dropdown-background);
-      color: var(--vscode-foreground); transition: border-color var(--ease);
-    }
-    .snap-btn:hover { border-color: var(--vscode-focusBorder); }
-    .snap-btn.danger { color: var(--c-vuln); border-color: color-mix(in srgb, var(--c-vuln) 30%, transparent); }
-    .snap-btn.danger:hover { background: var(--c-vuln-bg); }
-    #snapshots-empty {
-      text-align: center; padding: 40px;
-      color: var(--vscode-descriptionForeground); font-size: 12px;
-    }
-
-    /* ── Action buttons ──────────────────────────────── */
-    .act-group { display: flex; gap: 5px; align-items: center; }
-
-    .action-btn {
-      display:      inline-flex;
-      align-items:  center;
-      gap:          4px;
-      padding:      4px 10px;
-      font-size:    11.5px;
-      font-family:  inherit;
-      font-weight:  500;
-      border:       none;
-      border-radius: var(--radius);
-      cursor:       pointer;
-      transition:   background var(--ease), opacity var(--ease), transform var(--ease);
-      white-space:  nowrap;
-    }
-    .action-btn:active:not(:disabled) { transform: scale(.96); }
-    .action-btn:disabled { opacity: .4; cursor: default; transform: none; }
-
-    .action-btn.secondary {
-      background: var(--vscode-button-secondaryBackground);
-      color:      var(--vscode-button-secondaryForeground);
-    }
-    .action-btn.secondary:hover:not(:disabled) {
-      background: var(--vscode-button-secondaryHoverBackground);
-    }
-    .action-btn.primary {
-      background: var(--vscode-button-background);
-      color:      var(--vscode-button-foreground);
-    }
-    .action-btn.primary:hover:not(:disabled) {
-      background: var(--vscode-button-hoverBackground);
-    }
-    .action-btn.success {
-      background: var(--c-ok-bg);
-      color:      var(--c-ok);
-    }
-    .action-btn.success:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--c-ok) 22%, transparent);
-    }
-    .action-btn.danger {
-      background: rgba(248,113,113,.15);
-      color:      var(--c-vuln);
-    }
-    .action-btn.danger:hover:not(:disabled) { background: rgba(248,113,113,.25); }
-
-    /* ── Graph View ──────────────────────────────────── */
-    #view-graph {
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-    }
-    #graph-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 14px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-shrink: 0;
-      background: var(--vscode-editor-background);
-    }
-    #graph-toolbar span {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-      margin-right: auto;
-    }
-    .graph-btn {
-      padding: 3px 10px;
-      font-size: 11px;
-      font-family: inherit;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background .12s;
-    }
-    .graph-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    #graph-canvas { flex: 1; overflow: hidden; }
-    #graph-canvas svg { width: 100%; height: 100%; display: block; }
-
-    .graph-legend {
-      position: absolute;
-      bottom: 16px; right: 16px;
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      font-size: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      box-shadow: var(--shadow);
-      pointer-events: none;
-    }
-    .legend-item { display: flex; align-items: center; gap: 7px; }
-    .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    .node { cursor: pointer; }
-    .node circle {
-      stroke-width: 2px;
-      transition: r .15s ease;
-      filter: drop-shadow(0 1px 3px rgba(0,0,0,.25));
-    }
-    .node:hover circle { r: 10px; }
-    .node text {
-      font-size: 11.5px;
-      fill: var(--vscode-foreground);
-      dominant-baseline: middle;
-      pointer-events: none;
-      font-family: var(--vscode-font-family, sans-serif);
-    }
-    .node.root > text { font-weight: 700; font-size: 13px; }
-    .link {
-      fill: none;
-      stroke: var(--vscode-panel-border);
-      stroke-width: 1.5px;
-      stroke-opacity: .5;
-    }
-    .node.up-to-date       circle { fill: var(--c-ok);      stroke: var(--c-ok); }
-    .node.update-available circle { fill: var(--c-update);  stroke: var(--c-update); }
-    .node.unknown          circle { fill: var(--c-unknown); stroke: var(--c-unknown); }
-    .node.vulnerable       circle { fill: var(--c-vuln);    stroke: var(--c-vuln); }
-    .node.not-installed    circle { fill: none; stroke: var(--c-missing); stroke-dasharray: 4 2; }
-    .node.root             circle { fill: var(--vscode-button-background); stroke: var(--vscode-button-hoverBackground, var(--vscode-button-background)); r: 12px; }
-    .node.collapsed        circle { stroke-dasharray: 3 2; opacity: .75; }
-
-    /* ── Unused View ─────────────────────────────────── */
-    #view-unused { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
-
-    #scan-stats {
-      margin: 12px 18px 0;
-      padding: 7px 12px;
-      background: color-mix(in srgb, var(--vscode-focusBorder) 8%, transparent);
-      border-radius: var(--radius);
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-    }
-
-    #unused-banner {
-      margin: 10px 18px 0;
-      padding: 10px 14px;
-      background: color-mix(in srgb, var(--c-update) 8%, transparent);
-      border-left: 3px solid var(--c-update);
-      border-radius: 0 var(--radius) var(--radius) 0;
-      font-size: 11.5px;
-      line-height: 1.6;
-    }
-
-    code {
-      padding: 1px 5px;
-      background: color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
-      border-radius: 3px;
-      font-size: .9em;
-    }
-
-    #unused-empty {
-      display: none;
-      padding: 60px 20px;
-      text-align: center;
-      color: var(--vscode-descriptionForeground);
-    }
-    #unused-empty .empty-icon { font-size: 40px; margin-bottom: 12px; }
-    #unused-empty p { font-size: 13px; line-height: 1.6; }
-
-    /* ── Detail Panel ────────────────────────────────── */
-    #detail-panel {
-      display:     none;
-      position:    fixed;
-      right:  0; top: 0; bottom: 0;
-      width:       300px;
-      background:  var(--vscode-sideBar-background);
-      border-left: 1px solid var(--vscode-panel-border);
-      overflow-y:  auto;
-      z-index:     200;
-      box-shadow:  -4px 0 24px rgba(0,0,0,.2);
-      animation:   slideIn var(--ease);
-    }
-    @keyframes slideIn {
-      from { transform: translateX(24px); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
-    }
-
-    #detail-header {
-      display:         flex;
-      align-items:     center;
-      justify-content: space-between;
-      padding:         14px 16px 10px;
-      border-bottom:   1px solid var(--vscode-panel-border);
-      position:        sticky;
-      top:             0;
-      background:      var(--vscode-sideBar-background);
-      z-index:         1;
-    }
-    #detail-name {
-      font-size:   14px;
-      font-weight: 700;
-      color:       var(--vscode-foreground);
-    }
-    #detail-close {
-      background:  none;
-      border:      none;
-      color:       var(--vscode-descriptionForeground);
-      font-size:   18px;
-      line-height: 1;
-      cursor:      pointer;
-      padding:     2px 6px;
-      border-radius: var(--radius);
-      transition:  background var(--ease), color var(--ease);
-    }
-    #detail-close:hover {
-      background: var(--vscode-list-hoverBackground);
-      color:      var(--vscode-foreground);
-    }
-
-    #detail-body { padding: 14px 16px; }
-
-    .field {
-      margin-bottom: 12px;
-    }
-    .field label {
-      font-size:    10px;
-      font-weight:  700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color:        var(--vscode-descriptionForeground);
-      display:      block;
-      margin-bottom: 3px;
-    }
-    .field-value {
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .version-chip {
-      display:       inline-block;
-      padding:       2px 7px;
-      border-radius: var(--radius);
-      margin:        2px;
-      font-size:     11px;
-      background:    var(--vscode-badge-background);
-      color:         var(--vscode-badge-foreground);
-      cursor:        pointer;
-      transition:    background var(--ease), transform var(--ease);
-      font-variant-numeric: tabular-nums;
-    }
-    .version-chip:hover {
-      background: var(--vscode-button-background);
-      color:      var(--vscode-button-foreground);
-      transform:  scale(1.05);
-    }
-
-    .vuln-card {
-      margin-top: 6px;
-      padding: 10px;
-      background: var(--c-vuln-bg);
-      border: 1px solid color-mix(in srgb, var(--c-vuln) 30%, transparent);
-      border-radius: var(--radius);
-      font-size: 11px;
-      line-height: 1.6;
-    }
-    .vuln-id   { font-weight: 700; color: var(--c-vuln); }
-    .vuln-fix  { color: var(--vscode-descriptionForeground); margin-top: 3px; }
-    .vuln-desc { margin-top: 4px; color: var(--vscode-foreground); }
-
-    /* ── Loading ─────────────────────────────────────── */
-    #loading {
-      display:         none;
-      flex-direction:  column;
-      align-items:     center;
-      justify-content: center;
-      flex:            1;
-      gap:             14px;
-      color:           var(--vscode-descriptionForeground);
-    }
-
-    .loader {
-      position:      relative;
-      width:  40px; height: 40px;
-    }
-    .loader::before,
-    .loader::after {
-      content:       '';
-      position:      absolute;
-      inset:         0;
-      border-radius: 50%;
-      border:        3px solid transparent;
-    }
-    .loader::before {
-      border-top-color: var(--vscode-button-background);
-      animation: spin .7s linear infinite;
-    }
-    .loader::after {
-      border-bottom-color: color-mix(in srgb,
-        var(--vscode-button-background) 40%, transparent);
-      animation: spin 1.4s linear infinite reverse;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    #loading-msg {
-      font-size: 12px;
-      letter-spacing: .2px;
-    }
-
-    /* ── Empty State ─────────────────────────────────── */
-    #empty-state {
-      display:         none;
-      flex-direction:  column;
-      align-items:     center;
-      justify-content: center;
-      flex:            1;
-      gap:             12px;
-      color:           var(--vscode-descriptionForeground);
-    }
-    #empty-state .empty-icon { font-size: 52px; opacity: .5; margin-bottom: 4px; }
-    #empty-state .empty-title {
-      font-size: 16px; font-weight: 700;
-      color: var(--vscode-foreground); margin-bottom: 4px;
-    }
-    #empty-state p { font-size: 13px; max-width: 340px; text-align: center; line-height: 1.6; margin: 0; }
-    .empty-files {
-      display: flex; flex-direction: column; gap: 8px;
-      margin: 12px 0; width: 100%; max-width: 360px;
-    }
-    .empty-file-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 14px;
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-    }
-    .empty-file-icon { font-size: 18px; flex-shrink: 0; }
-    .empty-file-item code {
-      font-size: 12px; font-weight: 600;
-      color: var(--vscode-foreground);
-      display: block; margin-bottom: 2px;
-    }
-    .empty-file-desc {
-      font-size: 11px; color: var(--vscode-descriptionForeground);
-    }
-    .empty-actions { margin-top: 8px; }
-    .empty-btn {
-      padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      font-size: 13px; font-family: inherit;
-    }
-    .empty-btn:hover { opacity: .85; }
-
-    /* ── Overlay (click outside detail) ─────────────── */
-    #overlay {
-      display:    none;
-      position:   fixed;
-      inset:      0;
-      z-index:    199;
-      background: rgba(0,0,0,.18);
-      backdrop-filter: blur(1px);
-    }
-
-    /* ── Fade-in rows ────────────────────────────────── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    tbody tr { animation: fadeUp .18s ease both; }
-
-    /* ── Export button ───────────────────────────────── */
-    #btn-export {
-      background: var(--vscode-button-secondaryBackground);
-      color:      var(--vscode-button-secondaryForeground);
-      gap: 4px;
-    }
-    #btn-export:hover:not(:disabled) {
-      background: var(--vscode-button-secondaryHoverBackground);
-    }
-    #btn-export .chevron {
-      font-size: 9px;
-      opacity: .6;
-      transition: transform .18s var(--ease);
-      display: inline-block;
-    }
-    #export-wrap.open #btn-export .chevron { transform: rotate(180deg); }
-
-    /* ── Export dropdown ─────────────────────────────── */
-    #export-wrap { position: relative; display: inline-block; }
-    #export-menu {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 6px);
-      background: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
-      border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
-      border-radius: 6px;
-      overflow: hidden;
-      min-width: 180px;
-      z-index: 200;
-      box-shadow: var(--shadow);
-    }
-    #export-menu.open {
-      display: block;
-      animation: dropdownIn .15s var(--ease) both;
-    }
-    @keyframes dropdownIn {
-      from { opacity: 0; transform: translateY(-4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .export-label {
-      padding: 7px 12px 4px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: .05em;
-      text-transform: uppercase;
-      color: var(--vscode-descriptionForeground);
-      user-select: none;
-    }
-    .export-divider {
-      height: 1px;
-      background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
-      margin: 2px 0;
-    }
-    .export-item {
-      padding: 7px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      color: var(--vscode-menu-foreground, var(--vscode-foreground));
-      user-select: none;
-      transition: background .1s;
-    }
-    .export-item:last-child { margin-bottom: 4px; }
-    .export-item .ei-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
-    .export-item .ei-text { display: flex; flex-direction: column; }
-    .export-item .ei-title { font-weight: 600; }
-    .export-item .ei-sub   { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 1px; }
-    .export-item:hover { background: var(--vscode-list-hoverBackground); }
-
-    /* ── Add Package modal ───────────────────────────── */
-    #add-pkg-modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 300;
-      background: var(--vscode-widget-shadow, rgba(0,0,0,.5));
-      backdrop-filter: blur(2px);
-      align-items: center;
-      justify-content: center;
-    }
-    #add-pkg-modal.open {
-      display: flex;
-      animation: modalFadeIn .18s ease both;
-    }
-    @keyframes modalFadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    #add-pkg-dialog {
-      background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-      border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
-      border-radius: 8px;
-      width: min(460px, 94vw);
-      box-shadow: 0 8px 32px rgba(0,0,0,.4);
-      animation: modalSlideIn .18s var(--ease) both;
-      overflow: hidden;
-    }
-    @keyframes modalSlideIn {
-      from { transform: translateY(10px) scale(.98); opacity: 0; }
-      to   { transform: translateY(0)    scale(1);   opacity: 1; }
-    }
-
-    /* Modal header */
-    #add-pkg-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
-    }
-    #add-pkg-header-icon {
-      width: 28px; height: 28px;
-      background: var(--vscode-badge-background);
-      border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      flex-shrink: 0;
-      color: var(--vscode-badge-foreground);
-    }
-    #add-pkg-header-text { flex: 1; min-width: 0; }
-    #add-pkg-header-text h2 {
-      font-size: 13px;
-      font-weight: 600;
-      margin: 0;
-      color: var(--vscode-foreground);
-    }
-    #add-pkg-header-text p {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-      margin: 2px 0 0;
-    }
-    #add-pkg-close {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--vscode-icon-foreground, var(--vscode-foreground));
-      font-size: 16px;
-      line-height: 1;
-      padding: 4px 6px;
-      border-radius: 4px;
-      transition: background .12s;
-      opacity: .7;
-    }
-    #add-pkg-close:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
-
-    /* Modal body */
-    #add-pkg-body { padding: 16px; }
-    #add-pkg-search-row {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-    #add-pkg-input {
-      flex: 1;
-      padding: 6px 10px;
-      background: var(--vscode-input-background);
-      color: var(--vscode-input-foreground);
-      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-      border-radius: 4px;
-      font-size: 13px;
-      font-family: inherit;
-      outline: none;
-    }
-    #add-pkg-input::placeholder { color: var(--vscode-input-placeholderForeground); }
-    #add-pkg-input:focus { border-color: var(--vscode-focusBorder); outline: 1px solid var(--vscode-focusBorder); }
-
-    #add-pkg-search {
-      padding: 6px 12px;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      font-family: inherit;
-      font-weight: 500;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background .12s;
-    }
-    #add-pkg-search:hover { background: var(--vscode-button-secondaryHoverBackground); }
-
-    /* Result box */
-    #add-pkg-result {
-      min-height: 64px;
-      border-radius: 4px;
-      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-      background: var(--vscode-input-background);
-      padding: 10px 12px;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      display: flex;
-      align-items: center;
-    }
-    #add-pkg-result.has-result {
-      align-items: flex-start;
-      flex-direction: column;
-      gap: 5px;
-    }
-    #add-pkg-result.is-installed {
-      border-color: var(--c-ok);
-      background: var(--vscode-input-background);
-    }
-    #add-pkg-result.is-error {
-      border-color: var(--vscode-errorForeground, var(--c-vuln));
-    }
-    .apkg-row    { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-    .apkg-name   { font-size: 13px; font-weight: 700; color: var(--vscode-foreground); }
-    .apkg-ver    {
-      font-size: 11px; font-weight: 500;
-      background: var(--vscode-badge-background);
-      color: var(--vscode-badge-foreground);
-      padding: 1px 6px; border-radius: 10px;
-    }
-    .apkg-installed-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--vscode-testing-iconPassed, var(--c-ok));
-      background: var(--vscode-testing-passingForeground, transparent);
-      padding: 2px 7px;
-      border-radius: 10px;
-      border: 1px solid var(--c-ok);
-    }
-    .apkg-installed-hint {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-      line-height: 1.5;
-    }
-    .apkg-sum    { font-size: 11px; color: var(--vscode-descriptionForeground); line-height: 1.5; }
-    .apkg-error  { color: var(--vscode-errorForeground, var(--c-vuln)); }
-
-    /* Install button — already-installed state */
-    #add-pkg-install.is-installed {
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      opacity: .7;
-      cursor: default;
-    }
-
-    /* Modal footer */
-    #add-pkg-footer {
-      display: flex;
-      gap: 6px;
-      justify-content: flex-end;
-      padding: 10px 16px;
-      border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
-    }
-    #add-pkg-cancel {
-      padding: 5px 14px;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border: none; border-radius: 4px;
-      font-size: 12px; font-family: inherit;
-      cursor: pointer; transition: background .12s;
-    }
-    #add-pkg-cancel:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    #add-pkg-install {
-      padding: 5px 16px;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none; border-radius: 4px;
-      font-size: 12px; font-family: inherit; font-weight: 600;
-      cursor: pointer; transition: background .12s, opacity .12s;
-      display: flex; align-items: center; gap: 5px;
-    }
-    #add-pkg-install:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
-    #add-pkg-install:disabled { opacity: .38; cursor: default; }
-
-    /* ── Group tags ──────────────────────────────────── */
-    .group-tag {
-      display: inline-flex;
-      align-items: center;
-      font-size: 9px;
-      padding: 1px 5px;
-      border-radius: 3px;
-      white-space: nowrap;
-      font-weight: 600;
-    }
-    .group-tag.dev      { background: rgba(59,130,246,.18);  color: #60a5fa; }
-    .group-tag.test     { background: rgba(168,85,247,.18);  color: #c084fc; }
-    .group-tag.docs     { background: rgba(20,184,166,.18);  color: #2dd4bf; }
-    .group-tag.lint     { background: rgba(148,163,184,.18); color: #94a3b8; }
-    .group-tag.optional { background: rgba(251,191,36,.18);  color: #fbbf24; }
-
-    /* ── History timeline ────────────────────────────── */
-    .history-entry {
-      display: flex;
-      gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-      font-size: 12px;
-    }
-    .history-dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 3px;
-    }
-    .history-dot.pip-install { background: var(--c-ok); }
-    .history-dot.detected    { background: var(--c-unknown); }
-    .history-dot.pip-rollback { background: var(--c-missing); }
-    .history-action { font-weight: 600; }
-    .history-time   { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-
-    /* ── External link icon ──────────────────────────── */
-    .pkg-ext-link {
-      font-size: 10px;
-      color: var(--vscode-textLink-foreground);
-      opacity: 0.7;
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .pkg-ext-link:hover { opacity: 1; }
-
-    /* ── Bulk action bar ────────────────────────── */
-    #bulk-bar {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 16px;
-      background: var(--vscode-editor-selectionBackground);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      font-size: 12px;
-    }
-    #bulk-bar.visible { display: flex; }
-    #bulk-count { font-weight: 600; color: var(--vscode-foreground); }
-    .bulk-btn {
-      padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer;
-      font-size: 11px; font-family: inherit;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-    }
-    .bulk-btn.danger { background: rgba(248,113,113,.2); color: #f87171; }
-    /* ── Checkboxes ─────────────────────────────── */
-    .pkg-check { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
-    .col-check { width: 36px; text-align: center; }
-    /* ── Pin button ─────────────────────────────── */
-    .pin-btn {
-      background: none; border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px; padding: 3px 7px; cursor: pointer;
-      font-size: 11px; color: var(--vscode-descriptionForeground);
-    }
-    .pin-btn:hover { color: var(--vscode-foreground); border-color: var(--vscode-foreground); }
-    /* ── Copy toast ─────────────────────────────── */
-    #copy-toast {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: var(--vscode-notificationCenterHeader-background, #333);
-      color: var(--vscode-foreground); padding: 8px 18px; border-radius: 20px;
-      font-size: 12px; z-index: 999; opacity: 0; pointer-events: none;
-      transition: opacity 0.2s;
-    }
-    #copy-toast.show { opacity: 1; }
-
-    /* ── Welcome Tour ───────────────────────────────── */
-    #tour-backdrop {
-      display: none; position: fixed; inset: 0; z-index: 1000;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
-      pointer-events: none;
-    }
-    #tour-backdrop.active { display: block; }
-    #tour-tooltip {
-      display: none; position: fixed; z-index: 1001;
-      width: 260px;
-      background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--vscode-focusBorder);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: var(--shadow);
-      pointer-events: auto;
-    }
-    #tour-tooltip.active { display: block; }
-    #tour-step-label {
-      font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
-      color: var(--vscode-descriptionForeground); margin-bottom: 6px;
-    }
-    #tour-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-    #tour-text  { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.5; margin-bottom: 14px; }
-    #tour-actions { display: flex; justify-content: space-between; gap: 8px; }
-    #tour-skip {
-      padding: 4px 10px; background: none; border: 1px solid var(--vscode-panel-border);
-      border-radius: var(--radius); color: var(--vscode-descriptionForeground);
-      font-size: 11px; cursor: pointer;
-    }
-    #tour-skip:hover { border-color: var(--vscode-foreground); }
-    #tour-next {
-      padding: 4px 14px; background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground); border: none;
-      border-radius: var(--radius); font-size: 11px; cursor: pointer;
-    }
-    #tour-next:hover { background: var(--vscode-button-hoverBackground); }
-
-    /* ── Detail extras ──────────────────────────── */
-    .detail-meta-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;
-    }
-    .detail-meta-item {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px; padding: 8px 12px;
-    }
-    .detail-meta-label { font-size: 10px; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.5px; }
-    .detail-meta-value { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); margin-top: 2px; }
-
-    /* ── Sticky table header ─────────────────────────── */
-    #view-list table thead th {
-      position:   sticky;
-      top:        0;
-      z-index:    5;
-      background: var(--vscode-sideBar-background);
-      box-shadow: 0 1px 0 var(--vscode-panel-border);
-    }
-
-    /* ── Button inline spinner ───────────────────────── */
-    .btn-spinner {
-      display:       inline-block;
-      width:         10px; height: 10px;
-      border:        1.5px solid currentColor;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation:     spin .65s linear infinite;
-      vertical-align: middle;
-      flex-shrink:   0;
-    }
-
-    /* ── Filtered result count ───────────────────────── */
-    #result-count {
-      font-size:     11px;
-      color:         var(--vscode-descriptionForeground);
-      padding:       4px 18px;
-      flex-shrink:   0;
-      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-      background:    var(--vscode-editor-background);
-      min-height:    24px;
-      display:       flex;
-      align-items:   center;
-      gap:           6px;
-    }
-    #result-count:empty { display: none; }
-    .result-count-filter-active {
-      color:       var(--vscode-button-background);
-      font-weight: 500;
-    }
-    #result-count-clear {
-      font-size:   10px;
-      cursor:      pointer;
-      opacity:     .7;
-      padding:     1px 5px;
-      border-radius: 3px;
-      background:  color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
-
-    /* ── Environment Filter Tabs ───────────────────────── */
-    #env-tabs {
-      display: flex;
-      gap: 6px;
-      padding: 8px 18px;
-      background: var(--vscode-editor-background);
-      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-      flex-wrap: wrap;
-      flex-shrink: 0;
-    }
-    .env-tab {
-      padding: 4px 12px;
-      border-radius: var(--radius);
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--vscode-descriptionForeground);
-      transition: background var(--ease), color var(--ease), border-color var(--ease);
-    }
-    .env-tab:hover {
-      color: var(--vscode-foreground);
-      border-color: color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
-    }
-    .env-tab.active {
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border-color: var(--vscode-button-background);
-    }
-
-    /* ── Conflict Badge ────────────────────────────────── */
-    .conflict-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      background: rgba(249,115,22,.15);
-      color: #f97316;
-      font-size: 10px;
-      font-weight: 700;
-    }
-
-    /* ── Python Warning Badge ──────────────────────────── */
-    .python-warning-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      background: rgba(220,38,38,.15);
-      color: #dc2626;
-      font-size: 10px;
-      font-weight: 600;
-    }
-
-    /* ── Dashboard Tab ────────────────────────────────── */
-    #view-dashboard {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: none;
-    }
-    #view-dashboard.active {
-      display: flex;
-      flex-direction: column;
-    }
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .dashboard-card {
-      background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: var(--radius-lg);
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      gap: 8px;
-    }
-    .dashboard-card-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--vscode-descriptionForeground);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .dashboard-card-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--vscode-foreground);
-    }
-    .dashboard-card-subtitle {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-    }
-
-    /* ── Performance Tab ───────────────────────────────── */
-    #view-performance {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 18px;
-      display: none;
-    }
-    #view-performance.active {
-      display: flex;
-      flex-direction: column;
-    }
-    .perf-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    .perf-table thead th {
-      padding: 8px 12px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--vscode-descriptionForeground);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      position: sticky;
-      top: 0;
-      z-index: 2;
-    }
-    .perf-table tbody tr {
-      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-      transition: background var(--ease);
-    }
-    .perf-table tbody tr:hover {
-      background: var(--vscode-list-hoverBackground);
-    }
-    .perf-table td {
-      padding: 12px;
-      vertical-align: middle;
-    }
-    .perf-speed-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 9px;
-      border-radius: var(--radius);
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .perf-speed-fast {
-      background: var(--c-ok-bg);
-      color: var(--c-ok);
-    }
-    .perf-speed-moderate {
-      background: var(--c-update-bg);
-      color: var(--c-update);
-    }
-    .perf-speed-slow {
-      background: var(--c-vuln-bg);
-      color: var(--c-vuln);
-      transition:  opacity var(--ease), background var(--ease);
-    }
-    #result-count-clear:hover { opacity: 1; background: color-mix(in srgb, var(--vscode-panel-border) 80%, transparent); }
-
-    /* ── Dashboard v3 ────────────────────────────── */
-    #view-dashboard {
-      padding: 24px !important;
-    }
-    .dash-wrap { max-width: 1200px; margin: 0 auto; width: 100%; }
-    .dash-title {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 4px;
-      color: var(--vscode-foreground);
-    }
-    .dash-subtitle {
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      margin-bottom: 24px;
-    }
-    .dash-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
-      margin-bottom: 32px;
-    }
-    .dash-card {
-      position: relative;
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 10px;
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
-      overflow: hidden;
-    }
-    .dash-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: var(--dash-accent, var(--vscode-focusBorder));
-    }
-    .dash-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--dash-accent, var(--vscode-focusBorder));
-      box-shadow: 0 4px 16px rgba(0,0,0,.15);
-    }
-    .dash-card.pkgs { --dash-accent: #60a5fa; }
-    .dash-card.size { --dash-accent: #a78bfa; }
-    .dash-card.dl   { --dash-accent: #4ade80; }
-    .dash-card.sec  { --dash-accent: #fb923c; }
-    .dash-card-icon {
-      width: 36px; height: 36px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      background: color-mix(in srgb, var(--dash-accent) 15%, transparent);
-      color: var(--dash-accent);
-    }
-    .dash-card-label {
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .8px;
-      color: var(--vscode-descriptionForeground);
-    }
-    .dash-card-value {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    .dash-card-value .val {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--vscode-foreground);
-      line-height: 1;
-    }
-    .dash-card-value .unit {
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      font-weight: 500;
-    }
-
-    /* ── Section header ──────────────────────────── */
-    .dash-section-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--vscode-foreground);
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-
-    /* ── Maintainer cards ────────────────────────── */
-    .maintainer-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 10px;
-    }
-    .maint-card {
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-      padding: 12px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      transition: border-color .15s;
-    }
-    .maint-card:hover {
-      border-color: var(--vscode-focusBorder);
-    }
-    .maint-info { min-width: 0; flex: 1; }
-    .maint-name {
-      font-weight: 600;
-      font-size: 12.5px;
-      color: var(--vscode-foreground);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .maint-date {
-      font-size: 10.5px;
-      color: var(--vscode-descriptionForeground);
-      margin-top: 2px;
-    }
-    .maint-badge {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 3px 9px;
-      border-radius: 12px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .maint-badge.active {
-      background: rgba(74,222,128,.18);
-      color: #4ade80;
-      border: 1px solid rgba(74,222,128,.35);
-    }
-    .maint-badge.inactive {
-      background: rgba(148,163,184,.15);
-      color: #94a3b8;
-      border: 1px solid rgba(148,163,184,.3);
-    }
-    .maint-empty {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--vscode-descriptionForeground);
-      font-size: 13px;
-    }
-
-    /* ── Performance v3 ──────────────────────────── */
-    #view-performance {
-      padding: 24px !important;
-    }
-    .perf-wrap { max-width: 1000px; margin: 0 auto; width: 100%; }
-    .perf-summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .perf-sum-card {
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      text-align: center;
-    }
-    .perf-sum-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      font-weight: 600;
-      color: var(--vscode-descriptionForeground);
-      letter-spacing: .5px;
-    }
-    .perf-sum-val {
-      font-size: 22px;
-      font-weight: 700;
-      margin-top: 4px;
-      color: var(--vscode-foreground);
-    }
-    #perf-table-v3 {
-      width: 100%;
-      border-collapse: collapse;
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    #perf-table-v3 thead th {
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      padding: 12px 16px;
-      text-align: left;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--vscode-descriptionForeground);
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-    #perf-table-v3 tbody td {
-      padding: 12px 16px;
-      font-size: 12px;
-      border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-    }
-    #perf-table-v3 tbody tr:last-child td { border-bottom: none; }
-    #perf-table-v3 tbody tr:hover { background: var(--vscode-list-hoverBackground); }
-    .perf-bar {
-      display: inline-block;
-      height: 6px;
-      border-radius: 3px;
-      background: var(--vscode-focusBorder);
-      min-width: 20px;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    .perf-bar.fast     { background: #4ade80; }
-    .perf-bar.moderate { background: #fb923c; }
-    .perf-bar.slow     { background: #f87171; }
-    .perf-pill {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: 600;
-    }
-    .perf-pill.fast     { background: rgba(74,222,128,.18); color: #4ade80; }
-    .perf-pill.moderate { background: rgba(251,146,60,.18); color: #fb923c; }
-    .perf-pill.slow     { background: rgba(248,113,113,.18); color: #f87171; }
-    .perf-empty {
-      text-align: center;
-      padding: 80px 20px;
-      color: var(--vscode-descriptionForeground);
-      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-      border: 1px dashed var(--vscode-panel-border);
-      border-radius: 8px;
-    }
-    .perf-empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .5; }
-    .perf-empty-text { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); }
-    .perf-empty-sub  { font-size: 11px; margin-top: 6px; }
-  </style>
+  {{STYLE_CSS_URI}}
 </head>
 <body>
 
@@ -1884,30 +26,35 @@
       </div>
     </div>
     <div id="header-actions">
-      <button id="btn-add-pkg" class="hdr-btn" title="Install a new package">&#xFF0B; Add Package</button>
+      <button type="button" id="btn-add-pkg" class="hdr-btn" title="Install a new package">&#xFF0B; Add Package</button>
       <div id="export-wrap">
-        <button id="btn-export" class="hdr-btn" title="Export report">
-          &#x2B06; Export <span class="chevron">&#x25BE;</span>
+        <button type="button" id="btn-export" class="hdr-btn" title="Project tools">
+          🛠 Tools <span class="chevron">&#x25BE;</span>
         </button>
         <div id="export-menu">
-          <div class="export-section-label" style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Export Report</div>
+          <div class="export-section-label" data-i18n="export.reportLabel" style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Export Report</div>
           <div class="export-item" data-action="export-md">&#x1F4DD; Markdown</div>
           <div class="export-item" data-action="export-json">&#x7B;&#x7D; JSON</div>
           <div style="height:1px;background:var(--vscode-panel-border);margin:4px 0;"></div>
-          <div class="export-section-label" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Generate</div>
+          <div class="export-section-label" data-i18n="export.generateLabel" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Generate</div>
           <div class="export-item" data-action="gen-requirements">&#x1F4E6; requirements.txt from imports</div>
           <div class="export-item" data-action="gen-setup-bash">&#x1F427; Setup script (Bash)</div>
           <div class="export-item" data-action="gen-setup-ps">&#x1FA9F; Setup script (PowerShell)</div>
           <div class="export-item" data-action="gen-setup-md">&#x1F4D6; Setup README (Markdown)</div>
           <div style="height:1px;background:var(--vscode-panel-border);margin:4px 0;"></div>
-          <div class="export-section-label" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Migrate</div>
-          <div class="export-item" data-action="migrate-uv">&#x26A1; Migrate to uv</div>
+          <div class="export-section-label" data-i18n="export.migrateLabel" style="padding:6px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground);">Migrate</div>
+          <div class="export-item" data-action="migrate-uv-manual">&#x26A1; Migrate to uv (manual)</div>
+          <div class="export-item" data-action="migrate-uv-auto">&#x26A1; Migrate to uv (automatic)</div>
           <div class="export-item" data-action="migrate-poetry">&#x1F3AD; Migrate to Poetry</div>
         </div>
       </div>
-      <button id="btn-refresh" class="hdr-btn" title="Re-scan workspace">
+      <button type="button" id="btn-refresh" class="hdr-btn" title="Re-scan workspace">
         &#x21BB; Refresh
       </button>
+      <select id="lang-select" class="toolbar-select" title="Language" style="min-width:auto;padding:4px 8px;font-size:11px;">
+        <option value="en">🌐 EN</option>
+        <option value="it">🌐 IT</option>
+      </select>
     </div>
   </div>
 
@@ -1915,14 +62,16 @@
   <div id="toolbar">
     <div id="search-wrap">
       <span id="search-icon">&#x1F50D;</span>
-      <input id="search" type="text" placeholder="Search packages, summaries…" autocomplete="off" spellcheck="false" />
+      <input id="search" type="text" placeholder="Search packages, summaries…" autocomplete="off" spellcheck="false">
     </div>
     <select id="filter-status" class="toolbar-select">
       <option value="all">All statuses</option>
       <option value="update-available">Updates available</option>
       <option value="up-to-date">Up to date</option>
+      <option value="drift">Out of sync</option>
       <option value="unknown">Unknown</option>
       <option value="not-installed">Not installed</option>
+      <option value="update-ignored">Ignored updates</option>
     </select>
     <select id="filter-group" class="toolbar-select">
       <option value="all">All groups</option>
@@ -1933,32 +82,42 @@
       <option value="lint">Lint</option>
       <option value="optional">Optional</option>
     </select>
-    <button id="btn-safe-mode" title="Safe Mode: block major-version updates">🛡 Safe Mode</button>
+    <button type="button" id="btn-safe-mode" title="Safe Mode: block major-version updates">🛡 Safe Mode</button>
   </div>
 
   <!-- Stats Bar -->
   <div id="stats-bar">
-    <span class="stat-card ok clickable" id="stat-ok-card" data-filter="up-to-date" title="Click to filter">
+    <span class="stat-card ok clickable" id="stat-ok-card" data-filter="up-to-date">
       <span>✅</span>
       <span class="stat-num" id="stat-ok">0</span>
       <span>up to date</span>
     </span>
-    <span class="stat-card update clickable" id="stat-update-card" data-filter="update-available" title="Click to filter">
+    <span class="stat-card update clickable" id="stat-update-card" data-filter="update-available">
       <span>⬆️</span>
       <span class="stat-num" id="stat-update">0</span>
       <span>updates available</span>
     </span>
-    <span class="stat-card unknown clickable" id="stat-unknown-card" data-filter="unknown" title="Click to filter">
+    <span class="stat-card drift clickable" id="stat-drift-card" data-filter="drift">
+      <span>⚠️</span>
+      <span class="stat-num" id="stat-drift">0</span>
+      <span>disaligned</span>
+    </span>
+    <span class="stat-card unknown clickable" id="stat-unknown-card" data-filter="unknown">
       <span>❓</span>
       <span class="stat-num" id="stat-unknown">0</span>
       <span>unknown</span>
     </span>
-    <span class="stat-card vuln clickable" id="stat-vuln-card" data-filter="vuln" title="Click to filter" style="display:none">
+    <span class="stat-card vuln clickable" id="stat-vuln-card" data-filter="vuln" style="display:none">
       <span>&#x1F534;</span>
       <span class="stat-num" id="stat-vuln">0</span>
       <span>vulnerable</span>
     </span>
-    <span class="stat-card conflict clickable" id="stat-conflict-card" data-filter="conflict" title="Click to filter" style="display:none">
+    <span class="stat-card stale clickable" id="stat-stale-card" data-filter="stale" style="display:none">
+      <span>&#x1F570;&#xFE0F;</span>
+      <span class="stat-num" id="stat-stale">0</span>
+      <span>Stale</span>
+    </span>
+    <span class="stat-card conflict clickable" id="stat-conflict-card" data-filter="conflict" style="display:none">
       <span>&#x26A1;</span>
       <span class="stat-num" id="stat-conflict">0</span>
       <span>conflicts</span>
@@ -1970,8 +129,10 @@
 
   <!-- Tab Bar -->
   <div id="tab-bar">
-    <div class="tab active" data-tab="list">Package List</div>
     <div class="tab" data-tab="dashboard">Dashboard</div>
+    <div class="tab active" data-tab="list">Package List</div>
+    <div class="tab" data-tab="venv-health">Environment</div>
+    <div class="tab" data-tab="conflicts">Conflicts</div>
     <div class="tab" data-tab="unused">Unused Packages</div>
     <div class="tab" data-tab="graph">Dependency Graph</div>
     <div class="tab" data-tab="performance">Performance</div>
@@ -2018,17 +179,18 @@
         </div>
       </div>
       <div class="empty-actions">
-        <button class="empty-btn" onclick="document.getElementById('btn-refresh').click()">&#x21BB; Refresh</button>
+        <button class="empty-btn" id="empty-select-manual" type="button">Select requirements file…</button>
+        <button class="empty-btn empty-btn-secondary" id="empty-refresh" type="button">&#x21BB; Refresh</button>
       </div>
     </div>
 
     <!-- Dependency Graph -->
     <div id="view-graph">
       <div id="graph-toolbar">
-        <span>Scroll to zoom &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Click node to expand / view details</span>
-        <button class="graph-btn" id="graph-fit">⊡ Fit</button>
-        <button class="graph-btn" id="graph-zoom-in">＋</button>
-        <button class="graph-btn" id="graph-zoom-out">－</button>
+        <span id="graph-toolbar-hint">Scroll to zoom &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Click node for details &nbsp;·&nbsp; Double-click or orange dot to expand</span>
+        <button type="button" class="graph-btn" id="graph-fit">⊡ Fit</button>
+        <button type="button" class="graph-btn" id="graph-zoom-in">＋</button>
+        <button type="button" class="graph-btn" id="graph-zoom-out">－</button>
       </div>
       <div id="graph-canvas"></div>
     </div>
@@ -2064,21 +226,23 @@
     <!-- Bulk Action Bar -->
     <div id="bulk-bar">
       <span id="bulk-count">0 selected</span>
-      <button class="bulk-btn" id="bulk-update">↑ Update Selected</button>
-      <button class="bulk-btn danger" id="bulk-deselect">✕ Deselect All</button>
+      <button type="button" class="bulk-btn" id="bulk-install">⬇ Install Selected</button>
+      <button type="button" class="bulk-btn" id="bulk-update">↑ Update Selected</button>
+      <button type="button" class="bulk-btn" id="bulk-sync">🔗 Align Selected</button>
+      <button type="button" class="bulk-btn danger" id="bulk-deselect">✕ Deselect All</button>
     </div>
 
     <!-- Package List -->
     <div id="view-list">
       <div id="vuln-banner" class="alert-banner">
         <span class="alert-banner-msg">&#x1F534; <strong id="vuln-banner-count">0</strong> package(s) have known security vulnerabilities</span>
-        <button class="alert-banner-action" id="vuln-banner-jump">View affected</button>
-        <button class="alert-banner-dismiss" id="vuln-banner-dismiss" title="Dismiss">&times;</button>
+        <button type="button" class="alert-banner-action" id="vuln-banner-jump">View affected</button>
+        <button type="button" class="alert-banner-dismiss" id="vuln-banner-dismiss" title="Dismiss">&times;</button>
       </div>
       <div id="drift-banner" class="alert-banner">
-        <span class="alert-banner-msg">⚠️ <strong id="drift-banner-count">0</strong> package(s) installed version differs from requirements file</span>
-        <button class="alert-banner-action" id="drift-banner-view">View drift</button>
-        <button class="alert-banner-dismiss" id="drift-banner-dismiss" title="Dismiss">&times;</button>
+        <span class="alert-banner-msg">⚠️ <strong id="drift-banner-count">0</strong> package(s) with an exact pin (==) that differs from the installed version</span>
+        <button type="button" class="alert-banner-action" id="drift-banner-view">View drift</button>
+        <button type="button" class="alert-banner-dismiss" id="drift-banner-dismiss" title="Dismiss">&times;</button>
       </div>
       <div id="result-count"></div>
       <table>
@@ -2089,6 +253,12 @@
               <span class="th-inner">
                 Package
                 <span class="sort-icon" id="si-name">▲</span>
+              </span>
+            </th>
+            <th data-col="required">
+              <span class="th-inner">
+                Required
+                <span class="sort-icon" id="si-required">⬍</span>
               </span>
             </th>
             <th data-col="installed">
@@ -2128,7 +298,6 @@
     </div>
 
     <!-- History View -->
-    <!-- History View -->
     <div id="view-history" style="display:none; flex:1; overflow-y:auto; padding:18px;">
       <div style="max-width:800px;">
         <div style="margin-bottom:18px;">
@@ -2162,13 +331,19 @@
     <div id="view-snapshots" style="display:none">
       <div id="snapshots-header">
         <h3>&#x1F4F8; Environment Snapshots</h3>
-        <button id="btn-take-snapshot">&#x2795; Take Snapshot</button>
+        <button type="button" id="btn-take-snapshot">&#x2795; Take Snapshot</button>
       </div>
       <div id="snapshots-empty" style="display:none">
         <p>No snapshots yet. Take a snapshot to save the current installed state of all packages.</p>
       </div>
       <div id="snapshots-list"></div>
     </div>
+
+    <!-- Conflicts View -->
+    <div id="view-conflicts" style="display:none; flex:1; overflow-y:auto;"></div>
+
+    <!-- Venv Health View -->
+    <div id="view-venv-health" style="display:none; flex:1; overflow-y:auto;"></div>
 
     <!-- Dashboard View -->
     <div id="view-dashboard" style="display:none; flex:1; overflow-y:auto;">
@@ -2225,22 +400,22 @@
           <h2>Install New Package</h2>
           <p>Search PyPI and install into your environment</p>
         </div>
-        <button id="add-pkg-close" title="Close">&times;</button>
+        <button type="button" id="add-pkg-close" title="Close">&times;</button>
       </div>
       <div id="add-pkg-body">
         <div id="add-pkg-search-row">
           <input id="add-pkg-input" type="text"
             placeholder="e.g. requests, numpy, fastapi…"
-            autocomplete="off" spellcheck="false" />
-          <button id="add-pkg-search">Search</button>
+            autocomplete="off" spellcheck="false">
+          <button type="button" id="add-pkg-search">Search</button>
         </div>
         <div id="add-pkg-result">
           <span>Type a package name and press <strong>Search</strong> or Enter.</span>
         </div>
       </div>
       <div id="add-pkg-footer">
-        <button id="add-pkg-cancel">Cancel</button>
-        <button id="add-pkg-install" disabled>&#x2B07; Install</button>
+        <button type="button" id="add-pkg-cancel">Cancel</button>
+        <button type="button" id="add-pkg-install" disabled>&#x2B07; Install</button>
       </div>
     </div>
   </div>
@@ -2255,8 +430,8 @@
     <div id="tour-title"></div>
     <div id="tour-text"></div>
     <div id="tour-actions">
-      <button id="tour-skip">Skip tour</button>
-      <button id="tour-next">Next →</button>
+      <button type="button" id="tour-skip">Skip tour</button>
+      <button type="button" id="tour-next">Next →</button>
     </div>
   </div>
 
@@ -2267,14 +442,48 @@
   <div id="detail-panel">
     <div id="detail-header">
       <span id="detail-name">Package</span>
-      <button id="detail-close" title="Close">&times;</button>
+      <button type="button" id="detail-close" title="Close">&times;</button>
     </div>
     <div id="detail-body"></div>
   </div>
 
   <!-- D3.js -->
-  <script nonce="{{NONCE}}" src="https://d3js.org/d3.v7.min.js" crossorigin="anonymous"></script>
-  <!-- Extension script -->
+  <script nonce="{{NONCE}}" src="{{D3_JS_URI}}"></script>
+  <!-- Modular split scripts loaded sequentially -->
+  <script nonce="{{NONCE}}" src="{{STATE_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{I18N_EN_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{I18N_IT_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{I18N_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{HTML_SAFETY_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{VERSION_DISPLAY_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{PACKAGE_METRICS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{FILTERS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_ROW_BUILDER_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_EVENTS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_ROW_CONTEXT_MENU_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_UNUSED_REMOVE_CONFIRM_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_DIALOGS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_BULK_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABLE_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{MODAL_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TOUR_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{GRAPH_TREE_DATA_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{GRAPH_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_LICENSES_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_SNAPSHOTS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_DASHBOARD_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_PERFORMANCE_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_HISTORY_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_UNUSED_CONFIDENCE_ROWS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_UNUSED_BINDINGS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_UNUSED_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_CONFLICTS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_VENV_INSTALLED_PANEL_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TAB_VENV_HEALTH_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{TABS_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{DETAIL_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{MAIN_MESSAGE_ROUTER_JS_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{MAIN_DOM_SETUP_JS_URI}}"></script>
   <script nonce="{{NONCE}}" src="{{MAIN_JS_URI}}"></script>
 </body>
 </html>

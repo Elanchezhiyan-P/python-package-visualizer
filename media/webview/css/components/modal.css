@@ -1,0 +1,256 @@
+/* ── Add Package modal ───────────────────────────── */
+#add-pkg-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 300; /* Ensure it stays above the header and dropdown panels */
+  background: var(--vscode-widget-shadow, rgba(0,0,0,.5));
+  backdrop-filter: blur(2px);
+  align-items: center;
+  justify-content: center;
+}
+
+#add-pkg-modal.open {
+  display: flex;
+  animation: modalFadeIn .18s ease both;
+}
+
+#add-pkg-dialog {
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 8px;
+  width: min(460px, 94vw);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  animation: modalSlideIn .18s var(--ease) both;
+  overflow: hidden;
+}
+
+/* Modal header */
+#add-pkg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+}
+
+#add-pkg-header-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--vscode-badge-background);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  color: var(--vscode-badge-foreground);
+}
+
+#add-pkg-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+#add-pkg-header-text h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--vscode-foreground);
+}
+
+#add-pkg-header-text p {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin: 2px 0 0;
+}
+
+#add-pkg-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background .12s;
+  opacity: .7;
+}
+
+#add-pkg-close:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  opacity: 1;
+}
+
+/* Modal body */
+#add-pkg-body {
+  padding: 16px;
+}
+
+#add-pkg-search-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+#add-pkg-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+#add-pkg-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+#add-pkg-input:focus {
+  border-color: var(--vscode-focusBorder);
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+#add-pkg-search {
+  padding: 6px 12px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s;
+}
+
+#add-pkg-search:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Result box */
+#add-pkg-result {
+  min-height: 64px;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  background: var(--vscode-input-background);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+}
+
+#add-pkg-result.has-result {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#add-pkg-result.is-installed {
+  border-color: var(--c-ok);
+  background: var(--vscode-input-background);
+}
+
+#add-pkg-result.is-error {
+  border-color: var(--vscode-errorForeground, var(--c-vuln));
+}
+
+/* Modal footer */
+#add-pkg-footer {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+}
+
+#add-pkg-cancel {
+  padding: 5px 14px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .12s;
+}
+
+#add-pkg-cancel:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#add-pkg-install {
+  padding: 5px 16px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, opacity .12s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#add-pkg-install:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+#add-pkg-install:disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+/* Install button — already-installed state */
+#add-pkg-install.is-installed {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  opacity: .7;
+  cursor: default;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from { transform: translateY(10px) scale(.98); opacity: 0; }
+  to   { transform: translateY(0)    scale(1);   opacity: 1; }
+}
+
+/* Pin version dialog — native <select> list uses OS popup; force dropdown tokens */
+.pin-version-select {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  color-scheme: light dark;
+  background-color: var(--vscode-dropdown-background, var(--vscode-input-background));
+  color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, var(--vscode-panel-border)));
+}
+
+.pin-version-select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 25%, transparent);
+}
+
+.pin-version-select option {
+  background-color: var(--vscode-dropdown-background, #252526);
+  color: var(--vscode-dropdown-foreground, #cccccc);
+}

@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import { VersionChecker } from '../services/versionChecker.js';
 import { ImportScanner } from '../modules/importScanner.js';
+import { PackageScanner } from '../modules/packageScanner.js';
+import { shortLicenseLabel } from '../utils/licenseLabel.js';
+import { getIgnoredUpdateVersion } from '../services/ignoredUpdates.js';
+import { isUpdateSuppressedByIgnore } from '../utils/version.js';
 
 // API cost / model info for known LLM and AI client classes
 const LLM_INFO: Record<string, { provider: string; pricing: string; speed: string; notes?: string }> = {
@@ -41,6 +45,8 @@ export class ImportHoverProvider implements vscode.HoverProvider {
   constructor(
     private readonly checker: VersionChecker,
     private readonly importScanner: ImportScanner,
+    private readonly packageScanner: PackageScanner,
+    private readonly context: vscode.ExtensionContext,
   ) {}
 
   async provideHover(
@@ -60,13 +66,11 @@ export class ImportHoverProvider implements vscode.HoverProvider {
     // First check: is this directly an import line?
     const line = document.lineAt(position.line).text;
     let packageName: string | null = null;
-    let symbolKind = '';
 
     const directImport = line.match(/^\s*(?:import|from)\s+([a-zA-Z_][\w.]*)/);
     if (directImport && line.indexOf(directImport[1]) <= position.character &&
         line.indexOf(directImport[1]) + directImport[1].length >= position.character) {
       packageName = this.importScanner.mapToPackageName(directImport[1]);
-      symbolKind = 'module';
     }
 
     // Second check: scan the document for `from X import Y, Z` and check if hoveredWord is in the imported list
@@ -75,7 +79,6 @@ export class ImportHoverProvider implements vscode.HoverProvider {
       const sym = imports.get(hoveredWord);
       if (sym) {
         packageName = sym.packageName;
-        symbolKind = sym.kind;
       }
     }
 
@@ -130,7 +133,28 @@ export class ImportHoverProvider implements vscode.HoverProvider {
 
     try {
       const result = await this.checker.checkPackage(packageName, '');
-      const md = this.buildPackageCard(result, packageName, hoveredWord, symbolKind);
+      let hasConflict = false;
+      const wsFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+      const workspaceRoot = wsFolder?.uri.fsPath ?? this.packageScanner.getActiveProjectRoot();
+      if (workspaceRoot) {
+        try {
+          const conflicts = await this.packageScanner.checkConflicts(workspaceRoot);
+          const norm = packageName.toLowerCase();
+          hasConflict = conflicts.some(
+            c => c.package.toLowerCase() === norm || c.conflictingPackage.toLowerCase() === norm
+          );
+        } catch {
+          // ignore
+        }
+      }
+      const ignoredVersion = workspaceRoot
+        ? getIgnoredUpdateVersion(this.context, workspaceRoot, packageName)
+        : undefined;
+      const updateSuppressed = Boolean(
+        ignoredVersion &&
+        isUpdateSuppressedByIgnore(ignoredVersion, result.latestVersion)
+      );
+      const md = this.buildPackageCard(result, packageName, hasConflict, updateSuppressed);
       return new vscode.Hover(md, wordRange);
     } catch {
       return null;
@@ -143,28 +167,34 @@ export class ImportHoverProvider implements vscode.HoverProvider {
   private buildPackageCard(
     result: import('../services/versionChecker.js').VersionCheckResult,
     packageName: string,
-    hoveredWord: string,
-    symbolKind: string,
+    hasConflict = false,
+    updateSuppressed = false,
   ): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
     md.supportHtml = true;
 
     const vulnCount = result.vulnerabilities?.length ?? 0;
+    const updateAvailable = result.status === 'update-available' && !updateSuppressed;
 
     // ── Status dot ──────────────────────────────────────────────────────────
     const statusIcon = vulnCount > 0
       ? '\u{1F534}'
-      : result.status === 'up-to-date'
+      : result.status === 'up-to-date' || updateSuppressed
         ? '\u{1F7E2}'
-        : result.status === 'update-available'
+        : updateAvailable
           ? '\u{1F7E1}'
           : '\u26AA';
 
     // ── Header: package · version · license ────────────────────────────────
     const headerBits: string[] = [`\u{1F4E6} **${result.packageName}**`];
     headerBits.push(`\`v${result.latestVersion}\``);
-    if (result.license) { headerBits.push(result.license); }
+    if (result.license) {
+      const short = shortLicenseLabel(result.license);
+      if (short) {
+        headerBits.push(short);
+      }
+    }
     md.appendMarkdown(`#### ${headerBits.join(' \u00B7 ')}\n\n`);
 
     // ── Summary (short, 1 line) ─────────────────────────────────────────────
@@ -179,9 +209,11 @@ export class ImportHoverProvider implements vscode.HoverProvider {
     const statusBits: string[] = [];
     if (vulnCount > 0) {
       statusBits.push(`${statusIcon} ${vulnCount} CVE${vulnCount !== 1 ? 's' : ''}`);
-    } else if (result.status === 'up-to-date') {
+    } else if (result.status === 'up-to-date' || updateSuppressed) {
       statusBits.push(`${statusIcon} Up to date`);
-    } else if (result.status === 'update-available') {
+    } else if (hasConflict && updateAvailable) {
+      statusBits.push(`\u26A1 Update blocked (conflict)`);
+    } else if (updateAvailable) {
       statusBits.push(`${statusIcon} Update available`);
     }
     if (result.pythonRequires) {
@@ -198,8 +230,10 @@ export class ImportHoverProvider implements vscode.HoverProvider {
 
     // ── Quick Actions (compact, 2-3 max) ────────────────────────────────────
     const actions: string[] = [];
-    if (result.status === 'update-available') {
+    if (updateAvailable && !hasConflict) {
       actions.push(`[\u2191 Update](command:extension.updatePackage?${encodeURIComponent(JSON.stringify(packageName))} "pip install --upgrade ${packageName}")`);
+    } else if (hasConflict && updateAvailable) {
+      actions.push(`[\u26A1 Conflict](command:extension.openPackageVisualizer "Open Package Visualizer to revert or force update")`);
     }
     actions.push(`[\u{1F50D} Inspect](command:extension.openPackageVisualizer "Open Package Visualizer")`);
     actions.push(`[PyPI \u2197](https://pypi.org/project/${packageName}/ "View on PyPI")`);
@@ -224,13 +258,6 @@ export class ImportHoverProvider implements vscode.HoverProvider {
     if (months < 12) { return `${months} month${months !== 1 ? 's' : ''} ago`; }
     const years = Math.floor(days / 365);
     return `${years} year${years !== 1 ? 's' : ''} ago`;
-  }
-
-  /** Format large numbers: 3200000 → "3.2M", 45000 → "45K" */
-  private formatNumber(n: number): string {
-    if (n >= 1_000_000) { return (n / 1_000_000).toFixed(1) + 'M'; }
-    if (n >= 1_000)     { return (n / 1_000).toFixed(1) + 'K'; }
-    return String(n);
   }
 
   /** Scan the document and build a map of "imported symbol name → package info" */

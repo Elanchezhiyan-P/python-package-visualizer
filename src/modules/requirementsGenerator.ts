@@ -1,5 +1,4 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
+
 import { Logger } from '../utils/logger.js';
 import { ImportScanner } from './importScanner.js';
 import { PackageScanner } from './packageScanner.js';
@@ -13,7 +12,7 @@ export class RequirementsGenerator {
 
   async generate(workspaceRoot: string): Promise<string> {
     const importResult = await this.importScanner.scanImports(workspaceRoot);
-    const installed = await this.packageScanner.scanWorkspace(workspaceRoot);
+    const installed = (await this.packageScanner.scanWorkspace(workspaceRoot)).packages;
     const installedMap = new Map(installed.map(p => [p.name.toLowerCase(), p.installedVersion]));
 
     // Map imports to package names
@@ -41,10 +40,4 @@ export class RequirementsGenerator {
     return lines.join('\n');
   }
 
-  async writeFile(workspaceRoot: string, filename = 'requirements.txt'): Promise<vscode.Uri> {
-    const content = await this.generate(workspaceRoot);
-    const target = vscode.Uri.file(path.join(workspaceRoot, filename));
-    await vscode.workspace.fs.writeFile(target, Buffer.from(content, 'utf-8'));
-    return target;
-  }
 }

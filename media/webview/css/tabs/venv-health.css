@@ -1,0 +1,5 @@
+/* Venv Health Check Tab Styles */
+#view-venv-health {
+  flex: 1;
+  overflow-y: auto;
+}

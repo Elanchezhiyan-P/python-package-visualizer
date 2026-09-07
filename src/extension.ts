@@ -1,8 +1,15 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { Logger } from './utils/logger.js';
 import { PackageScanner } from './modules/packageScanner.js';
 import { VersionChecker } from './services/versionChecker.js';
 import { VersionHistoryCache } from './services/versionHistoryCache.js';
+import {
+  CONFIG_FILENAME,
+  invalidateCache,
+  isWriteInFlight,
+  migrateFromWorkspaceState,
+} from './services/projectVisualizerConfig.js';
 import { WebviewPanel } from './ui/webviewPanel.js';
 import { SidebarProvider } from './ui/sidebarProvider.js';
 import { StatusBarManager } from './ui/statusBarManager.js';
@@ -13,6 +20,7 @@ import { FunctionMetricsCodeLensProvider } from './providers/functionCodeLens.js
 import { FunctionHoverProvider } from './providers/functionHover.js';
 import { registerFunctionQuickFixes } from './providers/functionQuickFixes.js';
 import { ImportScanner } from './modules/importScanner.js';
+import { detectIde } from './utils/ideDetector.js';
 
 let _panel: WebviewPanel | undefined;
 
@@ -21,7 +29,7 @@ export function activate(context: vscode.ExtensionContext): void {
   logger.info('Python Package Visualizer activating...');
 
   try {
-    const scanner      = new PackageScanner(logger);
+    const scanner      = new PackageScanner(logger, context);
     const checker      = new VersionChecker(logger, context);
     const historyCache = new VersionHistoryCache(context, logger);
     const panel        = new WebviewPanel(context, logger);
@@ -30,7 +38,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
     _panel = panel;
 
-    // Register the sidebar webview view provider
+    const ide = detectIde();
+    logger.info(`Running in ${ide.displayName}${ide.isCursor ? ' (Cursor AI analysis available)' : ''}`);
+
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         'pythonPackageVisualizer.sidebar',
@@ -56,8 +66,40 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // CodeLens + Hover for Python imports
     const importScanner = new ImportScanner(logger);
-    const codeLensProvider = new ImportCodeLensProvider(logger, checker, importScanner, scanner);
-    const hoverProvider = new ImportHoverProvider(checker, importScanner);
+    const codeLensProvider = new ImportCodeLensProvider(logger, checker, importScanner, scanner, context);
+    const hoverProvider = new ImportHoverProvider(checker, importScanner, scanner, context);
+
+    controller.setImportCodeLensRefresh(() => codeLensProvider.refresh());
+
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      void migrateFromWorkspaceState(context, folder.uri.fsPath).catch(err => {
+        logger.warn(`Pin/Ignore config migrate failed: ${String(err)}`);
+      });
+    }
+
+    const configWatcher = vscode.workspace.createFileSystemWatcher(`**/${CONFIG_FILENAME}`);
+    const onProjectConfigFileEvent = (uri: vscode.Uri): void => {
+      const root = path.dirname(uri.fsPath);
+      if (isWriteInFlight(root)) {
+        return;
+      }
+      invalidateCache(root);
+      codeLensProvider.refresh();
+      void controller.refreshIfOpen();
+    };
+    context.subscriptions.push(
+      configWatcher,
+      configWatcher.onDidCreate(onProjectConfigFileEvent),
+      configWatcher.onDidChange(onProjectConfigFileEvent),
+      configWatcher.onDidDelete(onProjectConfigFileEvent),
+      vscode.workspace.onDidChangeWorkspaceFolders(e => {
+        for (const added of e.added) {
+          void migrateFromWorkspaceState(context, added.uri.fsPath).catch(err => {
+            logger.warn(`Pin/Ignore config migrate failed: ${String(err)}`);
+          });
+        }
+      })
+    );
 
     context.subscriptions.push(
       vscode.languages.registerCodeLensProvider(

@@ -1,0 +1,235 @@
+/* ── List View Container ─────────────────────────── */
+#view-list {
+  flex:       1;
+  overflow-y: auto;
+}
+
+/* ── Table shared structures ────────────────────── */
+table {
+  width:           100%;
+  border-collapse: collapse;
+  font-size:       12px;
+}
+
+thead {
+  position:   sticky;
+  top:        0;
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  z-index:    2;
+}
+
+#view-list table thead th {
+  position:   sticky;
+  top:        0;
+  z-index:    5;
+  background: var(--vscode-sideBar-background);
+  box-shadow: 0 1px 0 var(--vscode-panel-border);
+}
+
+th {
+  padding:     0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  white-space: nowrap;
+}
+
+/* Sortable header button */
+th .th-inner {
+  display:      inline-flex;
+  align-items:  center;
+  gap:          5px;
+  padding:      8px 12px;
+  width:        100%;
+  font-weight:  600;
+  font-size:    11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color:        var(--vscode-descriptionForeground);
+  cursor:       pointer;
+  user-select:  none;
+  transition:   color var(--ease), background var(--ease);
+  border-radius: 0;
+}
+th .th-inner:hover {
+  color:      var(--vscode-foreground);
+  background: var(--vscode-list-hoverBackground);
+}
+th.sorted .th-inner {
+  color: var(--vscode-foreground);
+}
+th:not([data-col]) .th-inner:hover { background: none; }
+
+.col-help {
+  opacity: .55;
+  font-size: 9px;
+  cursor: help;
+  margin-left: 4px;
+  font-weight: normal;
+  display: inline-block;
+  vertical-align: super;
+  transition: opacity var(--ease), color var(--ease);
+  color: var(--vscode-descriptionForeground);
+}
+.col-help:hover {
+  opacity: 1;
+  color: var(--vscode-foreground);
+}
+
+/* Sort icon */
+.sort-icon {
+  display:     inline-flex;
+  flex-direction: column;
+  gap:         1px;
+  opacity:     .35;
+  transition:  opacity var(--ease), transform var(--ease);
+  font-size:   9px;
+  line-height: 1;
+}
+th.sorted .sort-icon    { opacity: 1; }
+th.sort-asc  .sort-icon { color: var(--vscode-button-background); }
+th.sort-desc .sort-icon { color: var(--vscode-button-background); }
+
+td {
+  padding:      9px 12px;
+  border-bottom: 1px solid color-mix(in srgb,
+    var(--vscode-panel-border) 60%, transparent);
+  vertical-align: middle;
+}
+
+tbody tr {
+  transition: background var(--ease);
+  border-left: 3px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+tbody tr:hover td {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* Row left-border status indicators */
+tbody tr.row-update-available { border-left-color: var(--c-update); }
+tbody tr.row-up-to-date        { border-left-color: var(--c-ok); }
+tbody tr.row-vulnerable        { border-left-color: var(--c-vuln); background: rgba(248,113,113,.03); }
+tbody tr.row-conflict          { border-left-color: #f97316; background: rgba(249,115,22,.03); }
+tbody tr.row-not-installed     { border-left-color: var(--c-missing); }
+
+/* Fade-in rows animation */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+tbody tr { animation: fadeUp .18s ease both; }
+
+/* ── Health Score SVG Rings ──────────────────────── */
+.health-ring { vertical-align: middle; }
+.health-ring circle.track { fill: none; stroke: var(--vscode-panel-border); stroke-width: 2.5; }
+.health-ring circle.fill  { fill: none; stroke-width: 2.5; stroke-linecap: round;
+                              transition: stroke-dashoffset .5s ease, stroke .3s; }
+.health-score-good   .fill { stroke: var(--c-ok); }
+.health-score-warn   .fill { stroke: var(--c-update); }
+.health-score-bad    .fill { stroke: var(--c-vuln); }
+.health-score-text {
+  font-size: 6px; font-weight: 700; fill: currentColor;
+  dominant-baseline: central; text-anchor: middle;
+}
+td.col-health { width: 48px; text-align: center; }
+
+/* ── Size Heatmap tints ──────────────────────────── */
+tbody tr.size-md  td { background: color-mix(in srgb, rgba(251,146,60,.07) 100%, transparent); }
+tbody tr.size-lg  td { background: color-mix(in srgb, rgba(251,146,60,.13) 100%, transparent); }
+tbody tr.size-xl  td { background: color-mix(in srgb, rgba(251,146,60,.20) 100%, transparent); }
+tbody tr.size-md:hover td,
+tbody tr.size-lg:hover td,
+tbody tr.size-xl:hover td { background: var(--vscode-list-hoverBackground); }
+
+/* ── Install/Update Progress Bars ────────────────── */
+tbody tr[data-progress]::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 2px;
+  width: var(--row-progress, 0%);
+  background: var(--vscode-button-background);
+  transition: width 0.4s ease;
+}
+tbody tr[data-progress] .progress-stage {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-left: 6px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Package Cells Content ──────────────────────── */
+.pkg-row { cursor: default; }
+
+.pkg-desc {
+  font-size:  11px;
+  color:      var(--vscode-descriptionForeground);
+  margin-top: 3px;
+  max-width:  500px;
+  overflow:   hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pkg-name-link {
+  font-weight:      600;
+  font-size:        12.5px;
+  cursor:           pointer;
+  text-decoration:  none;
+  color:            var(--vscode-foreground);
+  transition:       color var(--ease);
+}
+.pkg-name-link:hover { color: var(--vscode-textLink-foreground); }
+
+.pkg-source {
+  font-size:  10px;
+  color:      var(--vscode-descriptionForeground);
+  padding:    1px 5px;
+  background: color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+  border-radius: 3px;
+}
+
+.ver { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.ver-latest { color: var(--c-ok); font-weight: 500; }
+.copy-hint {
+  font-size: 9px;
+  opacity: 0;
+  margin-left: 3px;
+  transition: opacity .12s;
+  color: var(--vscode-textLink-foreground);
+  pointer-events: none;
+  user-select: none;
+}
+td:hover .copy-hint { opacity: .55; }
+
+/* ── Columns and Checkboxes Binds ────────────────── */
+.col-check { width: 36px; text-align: center; }
+.pkg-check { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+.col-actions { text-align: right; }
+.act-group { display: flex; gap: 5px; align-items: center; justify-content: flex-end; }
+
+/* ── Sync Drift Resolution Button ────────────────── */
+.action-btn.sync {
+  background: rgba(45,212,191,.12);
+  border: 1px solid rgba(45,212,191,.35);
+  color: #2dd4bf;
+}
+.action-btn.sync:hover {
+  background: rgba(45,212,191,.22);
+  border-color: rgba(45,212,191,.55);
+}
+
+.pin-btn,
+.unpin-btn {
+  background: none; border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px; padding: 3px 7px; cursor: pointer;
+  font-size: 11px; color: var(--vscode-descriptionForeground);
+}
+.pin-btn:hover,
+.unpin-btn:hover { color: var(--vscode-foreground); border-color: var(--vscode-foreground); }

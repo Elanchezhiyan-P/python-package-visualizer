@@ -1,0 +1,108 @@
+/* ── Tools button & dropdown ─────────────────────── */
+#export-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+#btn-export {
+  background: var(--vscode-button-secondaryBackground);
+  color:      var(--vscode-button-secondaryForeground);
+  gap: 4px;
+}
+
+#btn-export:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#btn-export .chevron {
+  font-size: 9px;
+  opacity: .6;
+  transition: transform .18s var(--ease);
+  display: inline-block;
+}
+
+#export-wrap.open #btn-export .chevron {
+  transform: rotate(180deg);
+}
+
+#export-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 180px;
+  z-index: 200; /* Ensure dropdown stays on top of content views */
+  box-shadow: var(--shadow);
+}
+
+#export-menu.open {
+  display: block;
+  animation: dropdownIn .15s var(--ease) both;
+}
+
+.export-label {
+  padding: 7px 12px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+}
+
+.export-divider {
+  height: 1px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+  margin: 2px 0;
+}
+
+.export-item {
+  padding: 7px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  user-select: none;
+  transition: background .1s;
+}
+
+.export-item:last-child {
+  margin-bottom: 4px;
+}
+
+.export-item .ei-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.export-item .ei-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.export-item .ei-title {
+  font-weight: 600;
+}
+
+.export-item .ei-sub {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 1px;
+}
+
+.export-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Insights Demo</title>
+  <link rel="stylesheet" href="../../../scripts/screenshots/theme.css">
+  <style>
+    body { background: #1e1e1e; color: #d4d4d4; font-family: Consolas, "Courier New", monospace; font-size: 14px; padding: 24px 0; position: relative; }
+    .editor { max-width: 820px; margin: 0 auto; background: #1e1e1e; border: 1px solid #3c3c3c; border-radius: 8px; overflow: visible; box-shadow: 0 8px 32px rgba(0,0,0,.45); position: relative; }
+    .tab-bar { background: #252526; border-bottom: 1px solid #3c3c3c; padding: 8px 12px; font-family: "Segoe UI", sans-serif; font-size: 12px; color: #ccc; display: flex; gap: 8px; align-items: center; border-radius: 8px 8px 0 0; }
+    .tab-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: #0e639c; }
+    .code-area { display: flex; min-height: 340px; }
+    .gutter { color: #858585; text-align: right; padding: 16px 10px; min-width: 36px; border-right: 1px solid #3c3c3c; }
+    .gutter div { height: 22px; }
+    .lines { flex: 1; padding: 16px 18px; font-size: 13.5px; position: relative; }
+    .metrics { font-family: "Segoe UI", sans-serif; font-size: 11px; color: #999; margin-bottom: 2px; }
+    .metrics .warn { color: #cca700; display: block; margin-top: 1px; }
+    .metrics .fix { color: #3794ff; }
+    .kw { color: #569cd6; }
+    .fn { color: #dcdcaa; }
+    .str { color: #ce9178; }
+    .cm { color: #6a9955; }
+    .dec { color: #4ec9b0; }
+    .line { min-height: 22px; }
+    .hover-card {
+      position: absolute; right: 24px; top: 118px; width: 280px;
+      background: #252526; border: 1px solid #454545; border-radius: 6px;
+      padding: 12px 14px; font-family: "Segoe UI", sans-serif; font-size: 12px;
+      box-shadow: 0 12px 28px rgba(0,0,0,.55); z-index: 10;
+    }
+    .hover-card .title { font-weight: 700; font-size: 13px; margin-bottom: 4px; color: #fff; }
+    .hover-card .sub { color: #999; font-size: 11px; line-height: 1.5; margin-bottom: 8px; }
+    .hover-card .row { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; margin-bottom: 8px; }
+    .hover-card .badge { background: rgba(74,222,128,.15); color: #4ade80; border: 1px solid rgba(74,222,128,.3); border-radius: 10px; padding: 2px 8px; }
+    .hover-card .actions { display: flex; gap: 10px; color: #3794ff; font-size: 11px; }
+    .frame-label { text-align: center; font-family: "Segoe UI", sans-serif; font-size: 11px; color: #888; margin-bottom: 12px; letter-spacing: .04em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div class="frame-label">Code Insights — metrics, warnings &amp; hover cards</div>
+  <div class="editor">
+    <div class="tab-bar"><span class="dot"></span> chains.py — Python Package Visualizer demo</div>
+    <div class="code-area">
+      <div class="gutter"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div><div>11</div><div>12</div><div>13</div></div>
+      <div class="lines">
+        <div class="line"><span class="kw">from</span> langchain_groq <span class="kw">import</span> ChatGroq</div>
+        <div class="line"></div>
+        <div class="line">
+          <div class="metrics">📊 18 lines · 🔗 2 refs · ⚡ Low</div>
+          <span class="kw">def</span> <span class="fn">load_resume_text</span>(pdf_path: <span class="fn">str</span>) -&gt; <span class="fn">str</span>:
+        </div>
+        <div class="line">&nbsp;&nbsp;<span class="str">"""Extract text from a PDF resume."""</span></div>
+        <div class="line">&nbsp;&nbsp;<span class="cm"># parsing logic…</span></div>
+        <div class="line">&nbsp;&nbsp;<span class="kw">return</span> text</div>
+        <div class="line"></div>
+        <div class="line">
+          <div class="metrics">📊 25 lines · 🔗 0 refs · ⚡ Moderate
+            <span class="warn">⚠️ Missing type hints (3/3 untyped, no return type) — <span class="fix">Click to fix</span></span>
+            <span class="warn">⚠️ Missing docstring — <span class="fix">Click to add</span></span>
+          </div>
+          <span class="kw">def</span> <span class="fn">create_qa_chain</span>(resume_text):
+        </div>
+        <div class="line">&nbsp;&nbsp;llm = <span class="fn">ChatGroq</span>(model=<span class="str">"llama-3.3-70b"</span>)</div>
+        <div class="line">&nbsp;&nbsp;<span class="kw">return</span> llm</div>
+        <div class="line"></div>
+        <div class="hover-card">
+          <div class="title">🤖 ChatGroq</div>
+          <div class="sub">Provider: Groq<br>💰 Pricing: Free tier · ~$0.05–0.10/1M tokens<br>⚡ Speed: Very fast (~300 tok/s)</div>
+          <div class="row"><span class="badge">🟢 Up to date</span></div>
+          <div class="actions"><span>↑ Update</span><span>🔍 Inspect</span><span>PyPI ↗</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -96,6 +96,7 @@ export class FunctionMetricsCodeLensProvider implements vscode.CodeLensProvider 
   constructor(private readonly logger: Logger) {}
 
   refresh(): void {
+    this.logger.info('Refreshing function metrics CodeLenses');
     this._onDidChangeCodeLenses.fire();
   }
 

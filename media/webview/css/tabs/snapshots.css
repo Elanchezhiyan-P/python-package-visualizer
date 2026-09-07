@@ -1,0 +1,55 @@
+/* ── Snapshots View ─────────────────────────────── */
+#view-snapshots {
+  flex: 1; overflow-y: auto; padding: 16px 18px;
+}
+#snapshots-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+#snapshots-header h3 { font-size: 13px; font-weight: 600; }
+
+#btn-take-snapshot {
+  padding: 5px 14px;
+  background: var(--vscode-button-background);
+  color:      var(--vscode-button-foreground);
+  border:     none; border-radius: var(--radius);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+}
+
+#btn-take-snapshot:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.snapshot-card {
+  display:       flex;
+  align-items:   center;
+  gap:           12px;
+  padding:       10px 14px;
+  background:    var(--vscode-editorWidget-background);
+  border:        1px solid var(--vscode-panel-border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  transition:    border-color var(--ease);
+}
+.snapshot-card:hover { border-color: var(--vscode-focusBorder); }
+.snapshot-icon { font-size: 20px; }
+.snapshot-info { flex: 1; }
+.snapshot-name { font-size: 12px; font-weight: 600; }
+.snapshot-meta { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+.snapshot-actions { display: flex; gap: 6px; }
+
+.snap-btn {
+  padding: 3px 10px; border-radius: var(--radius);
+  font-size: 11px; font-family: inherit; cursor: pointer;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-foreground); transition: border-color var(--ease);
+}
+.snap-btn:hover { border-color: var(--vscode-focusBorder); }
+.snap-btn.danger { color: var(--c-vuln); border-color: color-mix(in srgb, var(--c-vuln) 30%, transparent); }
+.snap-btn.danger:hover { background: var(--c-vuln-bg); }
+
+#snapshots-empty {
+  text-align: center; padding: 40px;
+  color: var(--vscode-descriptionForeground); font-size: 12px;
+}

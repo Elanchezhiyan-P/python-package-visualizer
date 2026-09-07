@@ -1,0 +1,92 @@
+/* ── Dependency Graph View Layout ────────────────── */
+#view-graph {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+#graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex-shrink: 0;
+  background: var(--vscode-editor-background);
+}
+
+#graph-toolbar span {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-right: auto;
+}
+
+.graph-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.graph-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+#graph-canvas { flex: 1; overflow: hidden; }
+#graph-canvas svg { width: 100%; height: 100%; display: block; }
+
+/* ── Legend Overlay ──────────────────────────────── */
+.graph-legend {
+  position: absolute;
+  bottom: 16px; right: 16px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.legend-item { display: flex; align-items: center; gap: 7px; }
+.legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── SVG Node & Link Styling ──────────────────────── */
+.node { cursor: pointer; }
+.node circle {
+  stroke-width: 2px;
+  transition: r .15s ease;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.25));
+}
+.node:hover circle { r: 10px; }
+.node text {
+  font-size: 11.5px;
+  fill: var(--vscode-foreground);
+  dominant-baseline: middle;
+  pointer-events: none;
+  font-family: var(--vscode-font-family, sans-serif);
+}
+.node.root > text { font-weight: 700; font-size: 13px; }
+
+.link {
+  fill: none;
+  stroke: var(--vscode-panel-border);
+  stroke-width: 1.5px;
+  stroke-opacity: .5;
+}
+
+/* Node Colors by Status classes */
+.node.up-to-date       circle { fill: var(--c-ok);      stroke: var(--c-ok); }
+.node.update-available circle { fill: var(--c-update);  stroke: var(--c-update); }
+.node.unknown          circle { fill: var(--c-unknown); stroke: var(--c-unknown); }
+.node.vulnerable       circle { fill: var(--c-vuln);    stroke: var(--c-vuln); }
+.node.not-installed    circle { fill: none; stroke: var(--c-missing); stroke-dasharray: 4 2; }
+.node.conflict-blocked circle { fill: var(--c-conflict, #f97316); stroke: var(--c-conflict, #f97316); stroke-dasharray: 3 2; }
+.node.root             circle { fill: var(--vscode-button-background); stroke: var(--vscode-button-hoverBackground, var(--vscode-button-background)); r: 12px; }
+.node.collapsed        circle { stroke-dasharray: 3 2; opacity: .75; }
